@@ -2037,21 +2037,37 @@ class _JobFormDialogState extends State<_JobFormDialog> {
                 onDeleted: () => setState(() => drivers.remove(d)),
               ),
             ),
-            SizedBox(
-              width: 220,
-              child: TextField(
-                controller: _driverCtrl,
-                onChanged: (String text) => {print("Text changed: $text")},
-                onSubmitted: (v) {
-                  final t = v.trim();
-                  if (t.isNotEmpty && !drivers.contains(t)) {
-                    setState(() => drivers.add(t));
-                    _driverCtrl.clear();
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              decoration: BoxDecoration(
+                color: _bgField,
+                border: Border.all(color: _border),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: DropdownButton<String>(
+                hint: const Row(
+                  children: [
+                    Icon(Icons.add, size: 18),
+                    SizedBox(width: 8),
+                    Text('เพิ่มคนขับ'),
+                  ],
+                ),
+                value: null,
+                underline: const SizedBox(),
+                items: driverNames
+                    .where((name) => !drivers.contains(name))
+                    .map(
+                      (name) => DropdownMenuItem<String>(
+                        value: name,
+                        child: Text(name),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (value) {
+                  if (value != null && !drivers.contains(value)) {
+                    setState(() => drivers.add(value));
                   }
                 },
-                decoration: _dec(
-                  'เพิ่มคนขับ',
-                ).copyWith(prefixIcon: const Icon(Icons.add)),
               ),
             ),
           ],
