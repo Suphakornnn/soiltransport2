@@ -4,6 +4,7 @@ import 'package:flutter/painting.dart' as painting;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:soil_transport_app/models/job2_model.dart';
 import 'package:soil_transport_app/services/job_service.dart';
+import 'package:soil_transport_app/utils.dart';
 
 /// ==================
 ///  Reports Screen (Blue–White theme)
@@ -39,7 +40,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
     'ธ.ค.',
   ];
   String _thDate(DateTime d) => '${d.day} ${_thaiMonths[d.month - 1]} ${d.year + 543}';
-  String _baht(num v) {
+  String _baht(num? v) {
+    if (v == null) {
+      return '฿0';
+    }
     final s = v.toStringAsFixed(0);
     final buf = StringBuffer();
     for (int i = 0; i < s.length; i++) {
@@ -74,18 +78,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
   String _dateFilter = 'ทุกวัน';
   final _searchCtrl = TextEditingController();
   bool _isLoading = true;
+  List<Job2Model> jobs = [];
 
   @override
   void initState() {
     super.initState();
     _fetchAllData();
-    _fetchAllJobs();
-  }
-
-  _fetchAllJobs() async {
-    var myjob = MyJob();
-    List<Job2Model> jobs = await myjob.getAllJobs();
-    print('--');
   }
 
   @override
@@ -102,31 +100,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<void> _fetchReportsData() async {
     try {
-      QuerySnapshot snapshot =
-          await FirebaseFirestore.instance.collection('reports_jobs').orderBy('date', descending: true).get();
+      jobs = await MyJob().getAllJobs();
 
       List<Map<String, dynamic>> reports = [];
-      for (final doc in snapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        reports.add({
-          'id': doc.id,
-          'code': data['code'] ?? 'TR${doc.id.substring(0, 4)}',
-          'driver': data['driver'] ?? 'ไม่มีชื่อคนขับ',
-          'plate': data['plate'] ?? 'ไม่มีทะเบียน',
-          'date': (data['date'] as Timestamp?)?.toDate() ?? DateTime.now(),
-          'start': data['start'] ?? '—',
-          'end': data['end'] ?? '',
-          'from': data['fromName'] ?? 'ไม่ทราบที่มา',
-          'to': data['toName'] ?? 'ไม่ทราบปลายทาง',
-          'distance': ((data['distanceKm'] ?? 0) as num).toDouble(),
-          'unit': data['soilType'] ?? 'ไม่ทราบประเภท',
-          'trips': (data['trips'] ?? 0) as int,
-          'fuel': ((data['fuelBaht'] ?? 0) as num).toDouble(),
-          'income': ((data['incomeBaht'] ?? 0) as num).toDouble(),
-          'status': data['statusThai'] ?? 'ไม่ทราบสถานะ',
-          'note': data['note'] ?? '',
-        });
-      }
+      reports.addAll(jobs.map((j) => j.toJson()));
 
       // search
       if (_searchCtrl.text.isNotEmpty) {
@@ -141,10 +118,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 )
                 .toList();
       }
-      // status filter
-      if (_statusFilter != 'ทุกสถานะ') {
-        reports = reports.where((r) => r['status'] == _statusFilter).toList();
-      }
       // date filter (ง่ายๆตามตัวเลือก)
       final now = DateTime.now();
       DateTime? from;
@@ -156,22 +129,18 @@ class _ReportsScreenState extends State<ReportsScreen> {
         from = DateTime(now.year, now.month, 1);
       }
       if (from != null) {
-        reports = reports.where((r) => (r['date'] as DateTime).isAfter(from!) || _isSameDay(r['date'], from!)).toList();
+        reports = reports.toList();
       }
 
       // pagination
       _totalPages = (reports.length / _itemsPerPage).ceil();
       if (_totalPages == 0) _totalPages = 1;
-      final startIndex = (_currentPage - 1) * _itemsPerPage;
-      final endIndex = math.min(startIndex + _itemsPerPage, reports.length);
-
-      setState(() => _reports = reports.sublist(startIndex, endIndex));
+      setState(() => _reports = reports);
     } catch (e) {
       // ignore for brevity, สามารถ show Snack ได้
     }
   }
 
-  bool _isSameDay(DateTime a, DateTime b) => a.year == b.year && a.month == b.month && a.day == b.day;
 
   Future<void> _fetchSummaryData() async {
     try {
@@ -183,14 +152,12 @@ class _ReportsScreenState extends State<ReportsScreen> {
         if ((data['status'] as String?) == 'done') completedJobs++;
       }
 
-      final reportsSnapshot = await FirebaseFirestore.instance.collection('reports_jobs').get();
       double totalFuel = 0, totalIncome = 0;
       int totalTrips = 0;
-      for (final doc in reportsSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        totalFuel += ((data['fuelBaht'] ?? 0) as num).toDouble();
-        totalIncome += ((data['incomeBaht'] ?? 0) as num).toDouble();
-        totalTrips += (data['trips'] ?? 0) as int;
+      for (Job2Model job in jobs) {
+        totalFuel += ((job.fuelBaht ?? 0) as num).toDouble();
+        totalIncome += ((job.incomeBaht ?? 0) as num).toDouble();
+        totalTrips += (job.trips ?? 0) as int;
       }
 
       setState(() {
@@ -211,7 +178,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
       final reportsSnapshot =
           await FirebaseFirestore.instance
-              .collection('reports_jobs')
+              .collection('jobs')
               .where('date', isGreaterThanOrEqualTo: start)
               .where('date', isLessThanOrEqualTo: end)
               .get();
@@ -220,7 +187,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
       for (final doc in reportsSnapshot.docs) {
         final data = doc.data() as Map<String, dynamic>? ?? {};
         todayFuel += ((data['fuelBaht'] ?? 0) as num).toDouble();
-        todayIncome += ((data['incomeBaht'] ?? 0) as num).toDouble();
+        todayIncome += ((data['IncomeBaht'] ?? 0) as num).toDouble();
       }
 
       final jobsSnapshot =
@@ -292,295 +259,196 @@ class _ReportsScreenState extends State<ReportsScreen> {
               )
               : SingleChildScrollView(
                 padding: const EdgeInsets.all(16),
-                child: Column(
-                  children: [
-                    // Top summary
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _topCard(
-                          icon: Icons.assignment_outlined,
-                          title: 'งานทั้งหมด',
-                          value: '$_totalJobs',
-                          sub: 'เที่ยวงาน',
-                        ),
-                        _topCard(
-                          icon: Icons.check_circle_rounded,
-                          title: 'งานเสร็จสิ้น',
-                          value: '$_completedJobs',
-                          sub: 'จาก $_totalJobs งาน',
-                          iconColor: const Color(0xFF16A34A),
-                        ),
-                        _topCard(
-                          icon: Icons.local_gas_station,
-                          title: 'ค่าน้ำมันรวม',
-                          value: _baht(_totalFuel),
-                          sub: 'ทั้งหมด',
-                          iconColor: const Color(0xFFF59E0B),
-                        ),
-                        _topCard(
-                          icon: Icons.trending_up,
-                          title: 'รายได้รวม',
-                          value: _baht(_totalIncome),
-                          sub: '$_totalTrips เที่ยวบรรทุก',
-                          iconColor: _blue,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Filters (เดิมเป็น Row → เปลี่ยนเป็น Wrap เพื่อตัดล้นอัตโนมัติ)
-                    LayoutBuilder(
-                      builder: (context, c) {
-                        final maxW = c.maxWidth;
-                        final isNarrow = maxW < 700;
-                        final half = (maxW - 12) / 2;
-
-                        return Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            SizedBox(
-                              width: isNarrow ? maxW : math.min(480.0, maxW - 300),
-                              child: TextField(
-                                controller: _searchCtrl,
-                                onChanged: (_) => _applyFilters(),
-                                decoration: InputDecoration(
-                                  prefixIcon: const Icon(Icons.search, color: _blue),
-                                  hintText: 'ค้นหาทรัพยากร งาน คนขับ หรือทะเบียนรถ...',
-                                  isDense: true,
-                                  filled: true,
-                                  fillColor: Colors.white,
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(color: _cardBorder),
-                                  ),
-                                  focusedBorder: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: const BorderSide(color: _blue, width: 1.4),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: isNarrow ? half : 160,
-                              child: DropdownButtonFormField<String>(
-                                value: _statusFilter,
-                                items:
-                                    const [
-                                      'ทุกสถานะ',
-                                      'เสร็จสิ้น',
-                                      'กำลังดำเนินการ',
-                                      'รอดำเนินการ',
-                                      'ยกเลิก',
-                                    ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                                onChanged: (v) {
-                                  setState(() => _statusFilter = v!);
-                                  _applyFilters();
-                                },
-                                decoration: _dropDeco('ทุกสถานะ'),
-                                isDense: true,
-                              ),
-                            ),
-                            SizedBox(
-                              width: isNarrow ? half : 120,
-                              child: DropdownButtonFormField<String>(
-                                value: _dateFilter,
-                                items:
-                                    const [
-                                      'ทุกวัน',
-                                      'วันนี้',
-                                      'สัปดาห์นี้',
-                                      'เดือนนี้',
-                                    ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
-                                onChanged: (v) {
-                                  setState(() => _dateFilter = v!);
-                                  _applyFilters();
-                                },
-                                decoration: _dropDeco('ทุกวัน'),
-                                isDense: true,
-                              ),
-                            ),
-                            SizedBox(
-                              width: isNarrow ? maxW : 160,
-                              child: OutlinedButton.icon(
-                                onPressed: () {
-                                  _searchCtrl.clear();
-                                  _statusFilter = 'ทุกสถานะ';
-                                  _dateFilter = 'ทุกวัน';
-                                  _applyFilters();
-                                },
-                                icon: const Icon(Icons.filter_alt_off, color: _blue, size: 20),
-                                label: const Text(
-                                  'ล้างตัวกรอง',
-                                  style: TextStyle(color: _blue, fontWeight: FontWeight.w700),
-                                ),
-                                style: OutlinedButton.styleFrom(side: const BorderSide(color: _blue)),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Job cards + pagination
-                    if (_reports.isNotEmpty) ...[
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    children: [
+                      // Top summary
+                      Wrap(
+                        spacing: 12,
+                        runSpacing: 12,
+                        children: [
+                          _topCard(
+                            icon: Icons.assignment_outlined,
+                            title: 'งานทั้งหมด',
+                            value: '$_totalJobs',
+                            sub: 'เที่ยวงาน',
+                          ),
+                          _topCard(
+                            icon: Icons.check_circle_rounded,
+                            title: 'งานเสร็จสิ้น',
+                            value: '$_completedJobs',
+                            sub: 'จาก $_totalJobs งาน',
+                            iconColor: const Color(0xFF16A34A),
+                          ),
+                          _topCard(
+                            icon: Icons.local_gas_station,
+                            title: 'ค่าน้ำมันรวม',
+                            value: _baht(_totalFuel),
+                            sub: 'ทั้งหมด',
+                            iconColor: const Color(0xFFF59E0B),
+                          ),
+                          _topCard(
+                            icon: Icons.trending_up,
+                            title: 'รายได้รวม',
+                            value: _baht(_totalIncome),
+                            sub: '$_totalTrips เที่ยวบรรทุก',
+                            iconColor: _blue,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                  
+                      // Filters (เดิมเป็น Row → เปลี่ยนเป็น Wrap เพื่อตัดล้นอัตโนมัติ)
                       LayoutBuilder(
                         builder: (context, c) {
-                          final isWide = c.maxWidth > 900;
-                          final width = isWide ? (c.maxWidth - 16) / 2 : c.maxWidth;
+                          final maxW = c.maxWidth;
+                          final isNarrow = maxW < 700;
+                          final half = (maxW - 12) / 2;
+                  
                           return Wrap(
-                            spacing: 16,
-                            runSpacing: 16,
-                            children: _reports.map((e) => SizedBox(width: width, child: _jobCard(e))).toList(),
+                            spacing: 12,
+                            runSpacing: 12,
+                            children: [
+                              SizedBox(
+                                width: isNarrow ? maxW : math.min(480.0, maxW - 300),
+                                child: TextField(
+                                  controller: _searchCtrl,
+                                  onChanged: (_) => _applyFilters(),
+                                  decoration: InputDecoration(
+                                    prefixIcon: const Icon(Icons.search, color: _blue),
+                                    hintText: 'ค้นหาทรัพยากร งาน คนขับ หรือทะเบียนรถ...',
+                                    isDense: true,
+                                    filled: true,
+                                    fillColor: Colors.white,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(color: _cardBorder),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: const BorderSide(color: _blue, width: 1.4),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              SizedBox(
+                                width: isNarrow ? half : 160,
+                                child: DropdownButtonFormField<String>(
+                                  value: _statusFilter,
+                                  items:
+                                      const [
+                                        'ทุกสถานะ',
+                                        'เสร็จสิ้น',
+                                        'กำลังดำเนินการ',
+                                        'รอดำเนินการ',
+                                        'ยกเลิก',
+                                      ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                                  onChanged: (v) {
+                                    setState(() => _statusFilter = v!);
+                                    _applyFilters();
+                                  },
+                                  decoration: _dropDeco('ทุกสถานะ'),
+                                  isDense: true,
+                                ),
+                              ),
+                              SizedBox(
+                                width: isNarrow ? half : 120,
+                                child: DropdownButtonFormField<String>(
+                                  value: _dateFilter,
+                                  items:
+                                      const [
+                                        'ทุกวัน',
+                                        'วันนี้',
+                                        'สัปดาห์นี้',
+                                        'เดือนนี้',
+                                      ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
+                                  onChanged: (v) {
+                                    setState(() => _dateFilter = v!);
+                                    _applyFilters();
+                                  },
+                                  decoration: _dropDeco('ทุกวัน'),
+                                  isDense: true,
+                                ),
+                              ),
+                              SizedBox(
+                                width: isNarrow ? maxW : 160,
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    _searchCtrl.clear();
+                                    _statusFilter = 'ทุกสถานะ';
+                                    _dateFilter = 'ทุกวัน';
+                                    _applyFilters();
+                                  },
+                                  icon: const Icon(Icons.filter_alt_off, color: _blue, size: 20),
+                                  label: const Text(
+                                    'ล้างตัวกรอง',
+                                    style: TextStyle(color: _blue, fontWeight: FontWeight.w700),
+                                  ),
+                                  style: OutlinedButton.styleFrom(side: const BorderSide(color: _blue)),
+                                ),
+                              ),
+                            ],
                           );
                         },
                       ),
                       const SizedBox(height: 16),
-                      _buildPagination(),
-                      const SizedBox(height: 16),
-                    ] else
-                      _emptyBox(),
-
-                    // Charts (ทำให้กว้างเต็มจอในมือถือ เพื่อลดการล้น)
-                    LayoutBuilder(
-                      builder: (context, c) {
-                        final isNarrow = c.maxWidth < 700;
-                        final w = isNarrow ? c.maxWidth : (c.maxWidth - 16) / 2;
-                        return Wrap(
-                          spacing: 16,
-                          runSpacing: 16,
-                          children: [
-                            SizedBox(
-                              width: w,
-                              child: _chartCard(
-                                icon: Icons.show_chart,
-                                iconColor: _blue,
-                                title: 'ประสิทธิภาพรายวัน',
-                                child: SizedBox(
-                                  height: kChartHeight,
-                                  child: _LineAreaChart(
-                                    values: [_totalIncome.toDouble(), _todayIncome.toDouble(), _totalFuel.toDouble()],
-                                    subValues: [_totalFuel.toDouble(), _todayFuel.toDouble(), 0],
-                                    xLabels: ['ทั้งหมด', 'วันนี้', 'ค่าน้ำมัน'],
+                  
+                      // Job cards + pagination
+                      if (_reports.isNotEmpty) ...[
+                        LayoutBuilder(
+                          builder: (context, c) {
+                            final isWide = c.maxWidth > 900;
+                            final width = isWide ? (c.maxWidth - 16) / 2 : c.maxWidth;
+                            return Wrap(
+                              spacing: 16,
+                              runSpacing: 16,
+                              children: _reports.map((e) => SizedBox(width: width, child: _jobCard(e))).toList(),
+                            );
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        _buildPagination(),
+                        const SizedBox(height: 16),
+                      ] else
+                        _emptyBox(),
+                  
+                      LayoutBuilder(
+                        builder: (context, c) {
+                          final isNarrow = c.maxWidth < 700;
+                          final w = isNarrow ? c.maxWidth : (c.maxWidth - 16) / 2;
+                          return Wrap(
+                            spacing: 16,
+                            runSpacing: 16,
+                            children: [
+                              SizedBox(
+                                width: w,
+                                child: _chartCard(
+                                  icon: Icons.pie_chart,
+                                  iconColor: Colors.purple,
+                                  title: 'สถานะงาน',
+                                  child: SizedBox(
+                                    height: kChartHeight,
+                                    child: _PieChart(
+                                      statusMap: {
+                                        'done': _completedJobs,
+                                        'pending': _totalJobs - _completedJobs,
+                                      },
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            SizedBox(
-                              width: w,
-                              child: _chartCard(
-                                icon: Icons.pie_chart,
-                                iconColor: Colors.purple,
-                                title: 'สถานะงาน',
-                                child: SizedBox(
-                                  height: kChartHeight,
-                                  child: _PieChart(
-                                    statusMap: {
-                                      'เสร็จสิ้น': _completedJobs,
-                                      'กำลังดำเนินการ': _totalJobs - _completedJobs,
-                                    },
-                                  ),
-                                ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: w,
-                              child: _chartCard(
-                                icon: Icons.bar_chart,
-                                iconColor: Colors.indigo,
-                                title: 'ประสิทธิภาพรถแต่ละคัน',
-                                child: SizedBox(
-                                  height: kChartHeight,
-                                  child: _PerTruckBars(data: _getTruckPerformance()),
-                                ),
-                              ),
-                            ),
-                            SizedBox(
-                              width: w,
-                              child: _chartCard(
-                                icon: Icons.multiline_chart,
-                                iconColor: Colors.orange,
-                                title: 'ประเภทดินที่ขนส่ง',
-                                child: SizedBox(height: kChartHeight, child: _BarChart(categories: _getSoilTypes())),
-                              ),
-                            ),
-                          ],
-                        );
-                      },
-                    ),
-
-                    const SizedBox(height: 16),
-
-                    // Daily summary
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: Text(
-                        'สรุปรายวัน',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700, color: _textPrimary),
+                            ],
+                          );
+                        },
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 12,
-                      runSpacing: 12,
-                      children: [
-                        _dailyCard('งานวันนี้', '$_todayJobs', 'เที่ยวงาน', _blueSoft, _blue),
-                        _dailyCard(
-                          'เสร็จสิ้นวันนี้',
-                          '$_todayCompletedJobs',
-                          'งาน',
-                          const Color(0xFFEFFBF4),
-                          const Color(0xFF16A34A),
-                        ),
-                        _dailyCard(
-                          'น้ำมันวันนี้',
-                          _baht(_todayFuel),
-                          'บาท',
-                          const Color(0xFFFFF7ED),
-                          const Color(0xFFF59E0B),
-                        ),
-                        _dailyCard(
-                          'รายได้วันนี้',
-                          _baht(_todayIncome),
-                          'บาท',
-                          const Color(0xFFF5F3FF),
-                          const Color(0xFF7C3AED),
-                        ),
-                      ],
-                    ),
-                  ],
+                  
+                      const SizedBox(height: 60),
+                    ],
+                  ),
                 ),
               ),
     );
-  }
-
-  Map<String, double> _getTruckPerformance() {
-    final performance = <String, double>{};
-    for (final r in _reports) {
-      final plate = r['plate'] as String;
-      final trips = r['trips'] as int;
-      if (trips > 0) {
-        final incomePerTrip = (r['income'] as double) / trips;
-        performance[plate] = incomePerTrip;
-      }
-    }
-    return performance.isEmpty ? {'72-2905': 850.0, '83-2680': 920.0, '72410': 780.0} : performance;
-  }
-
-  List<_Bar> _getSoilTypes() {
-    final m = <String, int>{};
-    for (final r in _reports) {
-      final t = r['unit'] as String;
-      m[t] = (m[t] ?? 0) + 1;
-    }
-    return m.isEmpty
-        ? [_Bar('ดินลูกรัง', 12), _Bar('ดินถม', 8), _Bar('ดินเหนียว', 5)]
-        : m.entries.map((e) => _Bar(e.key, e.value.toDouble())).toList();
   }
 
   Widget _buildPagination() => Row(
@@ -702,34 +570,6 @@ class _ReportsScreenState extends State<ReportsScreen> {
     );
   }
 
-  Widget _dailyCard(String title, String value, String unit, Color bg, Color color) {
-    return SizedBox(
-      width: 260,
-      child: _panel(
-        child: Container(
-          decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(14)),
-          child: Padding(
-            padding: const EdgeInsets.all(14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title, style: const TextStyle(color: _textMuted)),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Text(value, style: TextStyle(color: color, fontWeight: FontWeight.w800, fontSize: 18)),
-                    const SizedBox(width: 6),
-                    Text(unit, style: const TextStyle(color: _textMuted)),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _jobCard(Map<String, dynamic> e) {
     Color statusColor(String s) {
       switch (s) {
@@ -794,7 +634,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           children: [
                             const Icon(Icons.event, size: 18, color: Colors.black54),
                             const SizedBox(width: 6),
-                            Text(_thDate(e['date'] as DateTime)),
+                            Text(_thDate(getDateTime(e['date']))),
                             const SizedBox(width: 8),
                             if (e['start'] != '—')
                               Text('${e['start']} - ${e['end'] ?? ''}', style: const TextStyle(color: Colors.black54)),
@@ -831,8 +671,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
                     flex: 4,
                     child: Row(
                       children: [
-                        Expanded(child: _metric('ค่าน้ำมัน', _baht(e['fuel']), Colors.orange)),
-                        Expanded(child: _metric('รายได้', _baht(e['income']), Colors.green)),
+                        Expanded(
+                          child: _metric(
+                            'ค่าน้ำมัน',
+                            _baht(e['fuelBaht'] != null ? (e['fuelBaht'] as num).toDouble() : null),
+                            Colors.orange,
+                          ),
+                        ),
+                        Expanded(
+                          child: _metric(
+                            'รายได้',
+                            _baht(e['IncomeBaht'] != null ? (e['IncomeBaht'] as num).toDouble() : null),
+                            Colors.green,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1076,12 +928,10 @@ class _PiePainter extends CustomPainter {
     final center = rect.center;
     final radius = rect.shortestSide / 2;
 
-    const order = ['เสร็จสิ้น', 'กำลังดำเนินการ', 'รอดำเนินการ', 'ยกเลิก'];
+    const order = ['done', 'pending'];
     final colors = {
-      'เสร็จสิ้น': const Color(0xFF16A34A),
-      'กำลังดำเนินการ': _blue,
-      'รอดำเนินการ': const Color(0xFFF59E0B),
-      'ยกเลิก': const Color(0xFFDC2626),
+      'done': const Color(0xFF16A34A),
+      'pending': _blue,
     };
 
     double startDeg = -90;
@@ -1194,12 +1044,14 @@ class _PieLegend extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const order = ['เสร็จสิ้น', 'กำลังดำเนินการ', 'รอดำเนินการ', 'ยกเลิก'];
+    const order = ['done', 'pending'];
     final colors = {
-      'เสร็จสิ้น': const Color(0xFF16A34A),
-      'กำลังดำเนินการ': _blue,
-      'รอดำเนินการ': const Color(0xFFF59E0B),
-      'ยกเลิก': const Color(0xFFDC2626),
+      'done': const Color(0xFF16A34A),
+      'pending': _blue,
+    };
+    final labels = {
+      'done': 'เสร็จสิ้น',
+      'pending': 'รอดำเนินการ',
     };
 
     return Wrap(
@@ -1213,7 +1065,7 @@ class _PieLegend extends StatelessWidget {
               children: [
                 Container(width: 10, height: 10, decoration: BoxDecoration(color: colors[k], shape: BoxShape.circle)),
                 const SizedBox(width: 6),
-                Text(k, style: const TextStyle(fontSize: 12, color: _textPrimary)),
+                Text(labels[k]!, style: const TextStyle(fontSize: 12, color: _textPrimary)),
               ],
             );
           }).toList(),
