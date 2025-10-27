@@ -1654,9 +1654,13 @@ class _JobFormDialogState extends State<_JobFormDialog> {
     setState(() {
       // สมมติว่าแต่ละ TruckModel มี property 'driverName'
       trucks = truckList;
+
+  
       // ใช้ driverNames ตามที่ต้องการ
     });
   }
+  List<String> get driverNames =>
+      trucks.map((truck) => truck.driver).toList();
 
   Future<void> _generateCode() async {
     final code = await widget.onGenerateCode();
@@ -2019,7 +2023,7 @@ class _JobFormDialogState extends State<_JobFormDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'คนขับ (${drivers.length} คน)',
+          'คนขับ (${drivers.length} คน) ',
           style: const TextStyle(color: Colors.black54),
         ),
         const SizedBox(height: 6),
