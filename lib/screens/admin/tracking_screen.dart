@@ -5,6 +5,9 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 // ===== OpenStreetMap =====
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart' as ll;
+import 'package:soil_transport_app/models/job2_model.dart';
+import 'package:soil_transport_app/services/job_service.dart';
+import 'package:soil_transport_app/utils.dart';
 
 /// ===== Blue–White Theme colors =====
 const _bgScaffold = Color(0xFFF5F8FF);
@@ -20,8 +23,7 @@ class TrackingScreen extends StatefulWidget {
   State<TrackingScreen> createState() => _TrackingScreenState();
 }
 
-class _TrackingScreenState extends State<TrackingScreen>
-    with TickerProviderStateMixin {
+class _TrackingScreenState extends State<TrackingScreen> with TickerProviderStateMixin {
   // --------------- UI States ----------------
   int _tab = 0; // 0=แผนที่, 1=รายการ
   String _search = '';
@@ -43,9 +45,10 @@ class _TrackingScreenState extends State<TrackingScreen>
   final Map<String, Tween<double>> _tweenLng = {};
   final Duration _moveDuration = const Duration(milliseconds: 900);
 
+  final List<Job2Model> jobs = [];
+
   // --------------- Helpers ----------------
-  String _fmtTime(DateTime dt) =>
-      '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+  String _fmtTime(DateTime dt) => '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
 
   String _ago(DateTime dt) {
     final d = DateTime.now().difference(dt);
@@ -102,6 +105,18 @@ class _TrackingScreenState extends State<TrackingScreen>
   void _doRefresh() => setState(() => _lastRefresh = DateTime.now());
 
   @override
+  void initState() {
+    super.initState();
+    _fetchJobs();
+  }
+
+  _fetchJobs() async {
+    jobs.clear();
+    var xx = await MyJob().getAllJobs();
+    jobs.addAll(xx);
+  }
+
+  @override
   void dispose() {
     for (final c in _controllers.values) {
       c.dispose();
@@ -121,15 +136,12 @@ class _TrackingScreenState extends State<TrackingScreen>
           Padding(
             padding: const EdgeInsets.only(right: 8),
             child: FilledButton.icon(
-              style: FilledButton.styleFrom(
-                backgroundColor: _blue,
-                foregroundColor: Colors.white,
-              ),
+              style: FilledButton.styleFrom(backgroundColor: _blue, foregroundColor: Colors.white),
               onPressed: _doRefresh,
               icon: const Icon(Icons.refresh),
               label: const Text('รีเฟรช'),
             ),
-          )
+          ),
         ],
       ),
 
@@ -145,60 +157,53 @@ class _TrackingScreenState extends State<TrackingScreen>
             return Center(child: Text('เกิดข้อผิดพลาด: ${snap.error}'));
           }
 
-          final docs = (snap.data?.docs ?? []).map((d) {
-            final m = (d.data() as Map<String, dynamic>? ?? {});
+          final docs =
+              (snap.data?.docs ?? []).map((d) {
+                final m = (d.data() as Map<String, dynamic>? ?? {});
 
-            // ป้องกัน lat/lng null/NaN
-            double? lat;
-            double? lng;
-            final latData = m['lat'];
-            final lngData = m['lng'];
-            if (latData is num && latData.isFinite) lat = latData.toDouble();
-            if (lngData is num && lngData.isFinite) lng = lngData.toDouble();
+                // ป้องกัน lat/lng null/NaN
+                double? lat;
+                double? lng;
+                final latData = m['lat'];
+                final lngData = m['lng'];
+                if (latData is num && latData.isFinite) lat = latData.toDouble();
+                if (lngData is num && lngData.isFinite) lng = lngData.toDouble();
 
-            return _VehicleRow(
-              id: d.id,
-              plate: (m['plate'] ??
-                      m['licensePlate'] ??
-                      m['vehiclePlate'] ??
-                      '')
-                  .toString(),
-              driver: (m['driver'] ?? m['driverName'] ?? '').toString(),
-              status: _statusFromString(m['status'] as String?),
-              lat: lat,
-              lng: lng,
-              speedKmh: (m['speedKmh'] as num?)?.toInt(),
-              updatedAt: (m['updatedAt'] is Timestamp)
-                  ? (m['updatedAt'] as Timestamp).toDate()
-                  : (m['lastUpdate'] is Timestamp)
-                      ? (m['lastUpdate'] as Timestamp).toDate()
-                      : null,
-              extra: m,
-            );
-          }).toList();
+                return _VehicleRow(
+                  id: d.id,
+                  plate: (m['plate'] ?? m['licensePlate'] ?? m['vehiclePlate'] ?? '').toString(),
+                  driver: (m['driver'] ?? m['driverName'] ?? '').toString(),
+                  status: _statusFromString(m['status'] as String?),
+                  lat: lat,
+                  lng: lng,
+                  speedKmh: (m['speedKmh'] as num?)?.toInt(),
+                  updatedAt:
+                      (m['updatedAt'] is Timestamp)
+                          ? (m['updatedAt'] as Timestamp).toDate()
+                          : (m['lastUpdate'] is Timestamp)
+                          ? (m['lastUpdate'] as Timestamp).toDate()
+                          : null,
+                  extra: m,
+                );
+              }).toList();
 
           // กรองตาม Search/Status
           final q = _search.trim().toLowerCase();
-          List<_VehicleRow> filtered = docs.where((v) {
-            final mq = q.isEmpty ||
-                v.plate.toLowerCase().contains(q) ||
-                v.driver.toLowerCase().contains(q);
-            final ms = _filterStatus == null || v.status == _filterStatus;
-            return mq && ms;
-          }).toList();
+          List<_VehicleRow> filtered =
+              docs.where((v) {
+                final mq = q.isEmpty || v.plate.toLowerCase().contains(q) || v.driver.toLowerCase().contains(q);
+                final ms = _filterStatus == null || v.status == _filterStatus;
+                return mq && ms;
+              }).toList();
 
           // ==== จุดสำคัญ: อัปเดตตำแหน่งแบบอนิเมต ====
           _applyAnimatedPositions(filtered);
 
           // นับสถานะ
-          final countWorking =
-              docs.where((v) => v.status == VStatus.working).length;
-          final countReady =
-              docs.where((v) => v.status == VStatus.ready).length;
-          final countRepair =
-              docs.where((v) => v.status == VStatus.repair).length;
-          final countOffline =
-              docs.where((v) => v.status == VStatus.offline).length;
+          final countWorking = docs.where((v) => v.status == VStatus.working).length;
+          final countReady = docs.where((v) => v.status == VStatus.ready).length;
+          final countRepair = docs.where((v) => v.status == VStatus.repair).length;
+          final countOffline = docs.where((v) => v.status == VStatus.offline).length;
 
           return RefreshIndicator(
             onRefresh: () async => _doRefresh(),
@@ -208,8 +213,10 @@ class _TrackingScreenState extends State<TrackingScreen>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('อัปเดตล่าสุด: ${_fmtTime(_lastRefresh)}',
-                      style: const TextStyle(color: _textMuted, fontSize: 12)),
+                  Text(
+                    'อัปเดตล่าสุด: ${_fmtTime(_lastRefresh)}',
+                    style: const TextStyle(color: _textMuted, fontSize: 12),
+                  ),
                   const SizedBox(height: 8),
 
                   // ----- summary cards -----
@@ -217,14 +224,10 @@ class _TrackingScreenState extends State<TrackingScreen>
                     spacing: 12,
                     runSpacing: 12,
                     children: [
-                      _summaryCard('กำลังทำงาน', countWorking,
-                          _statusColor(VStatus.working)),
-                      _summaryCard('พร้อมงาน', countReady,
-                          _statusColor(VStatus.ready)),
-                      _summaryCard('ซ่อมบำรุง', countRepair,
-                          _statusColor(VStatus.repair)),
-                      _summaryCard('ออฟไลน์', countOffline,
-                          _statusColor(VStatus.offline)),
+                      _summaryCard('กำลังทำงาน', countWorking, _statusColor(VStatus.working)),
+                      _summaryCard('พร้อมงาน', countReady, _statusColor(VStatus.ready)),
+                      _summaryCard('ซ่อมบำรุง', countRepair, _statusColor(VStatus.repair)),
+                      _summaryCard('ออฟไลน์', countOffline, _statusColor(VStatus.offline)),
                     ],
                   ),
                   const SizedBox(height: 12),
@@ -232,23 +235,14 @@ class _TrackingScreenState extends State<TrackingScreen>
                   // ----- segmented tabs -----
                   Row(
                     children: [
-                      _segBtn(
-                          label: 'แผนที่',
-                          selected: _tab == 0,
-                          onTap: () => setState(() => _tab = 0)),
+                      _segBtn(label: 'แผนที่', selected: _tab == 0, onTap: () => setState(() => _tab = 0)),
                       const SizedBox(width: 8),
-                      _segBtn(
-                          label: 'รายการ',
-                          selected: _tab == 1,
-                          onTap: () => setState(() => _tab = 1)),
+                      _segBtn(label: 'รายการ', selected: _tab == 1, onTap: () => setState(() => _tab = 1)),
                     ],
                   ),
                   const SizedBox(height: 12),
 
-                  if (_tab == 0)
-                    _mapTab(filtered)
-                  else
-                    _listTab(filtered),
+                  if (_tab == 0) _mapTab(filtered) else _listTab(filtered),
                 ],
               ),
             ),
@@ -274,18 +268,13 @@ class _TrackingScreenState extends State<TrackingScreen>
       _animPos.putIfAbsent(id, () => target);
 
       final cur = _animPos[id]!;
-      final moved = (cur.latitude != target.latitude) ||
-          (cur.longitude != target.longitude);
+      final moved = (cur.latitude != target.latitude) || (cur.longitude != target.longitude);
       if (!moved) continue;
 
       // สร้าง/รีเซ็ต controller
       _controllers[id]?.dispose();
-      final ctrl =
-          AnimationController(vsync: this, duration: _moveDuration);
-      final curved = CurvedAnimation(
-        parent: ctrl,
-        curve: Curves.easeInOut,
-      );
+      final ctrl = AnimationController(vsync: this, duration: _moveDuration);
+      final curved = CurvedAnimation(parent: ctrl, curve: Curves.easeInOut);
       _controllers[id] = ctrl;
 
       // เตรียม tween
@@ -295,10 +284,7 @@ class _TrackingScreenState extends State<TrackingScreen>
       // ระหว่างอนิเมชัน อัปเดตตำแหน่งและรีเฟรชจอ
       curved.addListener(() {
         final t = curved.value;
-        _animPos[id] = ll.LatLng(
-          _tweenLat[id]!.transform(t),
-          _tweenLng[id]!.transform(t),
-        );
+        _animPos[id] = ll.LatLng(_tweenLat[id]!.transform(t), _tweenLng[id]!.transform(t));
         if (mounted) setState(() {});
       });
 
@@ -347,46 +333,46 @@ class _TrackingScreenState extends State<TrackingScreen>
               _mapCtl.move(pos, 14);
               showModalBottomSheet(
                 context: context,
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16)),
-                builder: (_) => Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(children: [
-                        Container(
-                            width: 10,
-                            height: 10,
-                            decoration: BoxDecoration(
-                                color: color, shape: BoxShape.circle)),
-                        const SizedBox(width: 8),
-                        Text('${v.plate} • ${_statusText(v.status)}',
-                            style:
-                                const TextStyle(fontWeight: FontWeight.w800)),
-                      ]),
-                      const SizedBox(height: 6),
-                      Text('คนขับ: ${v.driver}',
-                          style: const TextStyle(color: _textPrimary)),
-                      if (v.speedKmh != null)
-                        Text('ความเร็ว: ${v.speedKmh} กม./ชม.',
-                            style: const TextStyle(color: _textMuted)),
-                      if (v.updatedAt != null)
-                        Text('อัปเดต: ${_ago(v.updatedAt!)}',
-                            style: const TextStyle(color: _textMuted)),
-                      const SizedBox(height: 6),
-                      Align(
-                        alignment: Alignment.centerRight,
-                        child: TextButton.icon(
-                          onPressed: () => Navigator.pop(context),
-                          icon: const Icon(Icons.close),
-                          label: const Text('ปิด'),
-                        ),
-                      )
-                    ],
-                  ),
-                ),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                builder:
+                    (_) => Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                '${v.plate} • ${_statusText(v.status)}',
+                                style: const TextStyle(fontWeight: FontWeight.w800),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text('คนขับ: ${v.driver}', style: const TextStyle(color: _textPrimary)),
+                          if (v.speedKmh != null)
+                            Text('ความเร็ว: ${v.speedKmh} กม./ชม.', style: const TextStyle(color: _textMuted)),
+                          if (v.updatedAt != null)
+                            Text('อัปเดต: ${_ago(v.updatedAt!)}', style: const TextStyle(color: _textMuted)),
+                          const SizedBox(height: 6),
+                          Align(
+                            alignment: Alignment.centerRight,
+                            child: TextButton.icon(
+                              onPressed: () => Navigator.pop(context),
+                              icon: const Icon(Icons.close),
+                              label: const Text('ปิด'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
               );
             },
             child: _Dot(color: color),
@@ -405,17 +391,14 @@ class _TrackingScreenState extends State<TrackingScreen>
           options: MapOptions(
             initialCenter: _initialCenter,
             initialZoom: _initialZoom,
-            interactionOptions: const InteractionOptions(
-              flags: ~InteractiveFlag.rotate,
-            ),
+            interactionOptions: const InteractionOptions(flags: ~InteractiveFlag.rotate),
             onMapReady: () {
               if (markers.isNotEmpty) _fitAll(markers);
             },
           ),
           children: [
             TileLayer(
-              urlTemplate:
-                  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+              urlTemplate: "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
               subdomains: const ['a', 'b', 'c'],
               userAgentPackageName: 'com.example.soil_transport_app',
             ),
@@ -429,11 +412,12 @@ class _TrackingScreenState extends State<TrackingScreen>
   void _fitAll(List<Marker> markers) {
     if (markers.isEmpty) return;
 
-    final valid = markers.where((m) {
-      final lat = m.point.latitude;
-      final lng = m.point.longitude;
-      return lat.isFinite && lng.isFinite;
-    }).toList();
+    final valid =
+        markers.where((m) {
+          final lat = m.point.latitude;
+          final lng = m.point.longitude;
+          return lat.isFinite && lng.isFinite;
+        }).toList();
     if (valid.isEmpty) return;
 
     if (valid.length == 1) {
@@ -458,22 +442,11 @@ class _TrackingScreenState extends State<TrackingScreen>
       if (lng > maxLng) maxLng = lng;
     }
 
-    if (!minLat.isFinite ||
-        !maxLat.isFinite ||
-        !minLng.isFinite ||
-        !maxLng.isFinite) return;
+    if (!minLat.isFinite || !maxLat.isFinite || !minLng.isFinite || !maxLng.isFinite) return;
 
-    final bounds = LatLngBounds(
-      ll.LatLng(minLat, minLng),
-      ll.LatLng(maxLat, maxLng),
-    );
+    final bounds = LatLngBounds(ll.LatLng(minLat, minLng), ll.LatLng(maxLat, maxLng));
 
-    _mapCtl.fitCamera(
-      CameraFit.bounds(
-        bounds: bounds,
-        padding: const EdgeInsets.all(60),
-      ),
-    );
+    _mapCtl.fitCamera(CameraFit.bounds(bounds: bounds, padding: const EdgeInsets.all(60)));
   }
 
   Widget _listTab(List<_VehicleRow> vehicles) {
@@ -511,14 +484,10 @@ class _TrackingScreenState extends State<TrackingScreen>
                 isDense: true,
                 items: const [
                   DropdownMenuItem(value: null, child: Text('ทุกสถานะ')),
-                  DropdownMenuItem(
-                      value: VStatus.working, child: Text('กำลังทำงาน')),
-                  DropdownMenuItem(
-                      value: VStatus.ready, child: Text('พร้อมงาน')),
-                  DropdownMenuItem(
-                      value: VStatus.repair, child: Text('ซ่อมบำรุง')),
-                  DropdownMenuItem(
-                      value: VStatus.offline, child: Text('ออฟไลน์')),
+                  DropdownMenuItem(value: VStatus.working, child: Text('กำลังทำงาน')),
+                  DropdownMenuItem(value: VStatus.ready, child: Text('พร้อมงาน')),
+                  DropdownMenuItem(value: VStatus.repair, child: Text('ซ่อมบำรุง')),
+                  DropdownMenuItem(value: VStatus.offline, child: Text('ออฟไลน์')),
                 ],
                 onChanged: (v) => setState(() => _filterStatus = v),
                 decoration: InputDecoration(
@@ -550,8 +519,7 @@ class _TrackingScreenState extends State<TrackingScreen>
               border: Border.all(color: _cardBorder),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Text('ยังไม่พบรถที่ตรงกับเงื่อนไข',
-                style: TextStyle(color: _textMuted)),
+            child: const Text('ยังไม่พบรถที่ตรงกับเงื่อนไข', style: TextStyle(color: _textMuted)),
           )
         else
           ...vehicles.map((v) => _vehicleCardFromRow(v)).toList(),
@@ -569,29 +537,22 @@ class _TrackingScreenState extends State<TrackingScreen>
           color: Colors.white,
           border: Border.all(color: _cardBorder),
           borderRadius: BorderRadius.circular(14),
-          boxShadow: const [
-            BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))
-          ],
+          boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
         ),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           child: Row(
             children: [
-              Container(
-                  width: 10,
-                  height: 10,
-                  decoration:
-                      BoxDecoration(color: dotColor, shape: BoxShape.circle)),
+              Container(width: 10, height: 10, decoration: BoxDecoration(color: dotColor, shape: BoxShape.circle)),
               const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('$num',
-                        style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 18,
-                            color: _textPrimary)),
+                    Text(
+                      '$num',
+                      style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: _textPrimary),
+                    ),
                     Text(title, style: const TextStyle(color: _textMuted)),
                   ],
                 ),
@@ -603,10 +564,7 @@ class _TrackingScreenState extends State<TrackingScreen>
     );
   }
 
-  Widget _segBtn(
-      {required String label,
-      required bool selected,
-      required VoidCallback onTap}) {
+  Widget _segBtn({required String label, required bool selected, required VoidCallback onTap}) {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
@@ -617,51 +575,40 @@ class _TrackingScreenState extends State<TrackingScreen>
             color: selected ? _blue : _blueSoft,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(color: selected ? _blue : _cardBorder),
-            boxShadow: selected
-                ? [
-                    BoxShadow(
-                        color: _blue.withOpacity(.25),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2))
-                  ]
-                : null,
+            boxShadow:
+                selected
+                    ? [BoxShadow(color: _blue.withOpacity(.25), blurRadius: 10, offset: const Offset(0, 2))]
+                    : null,
           ),
           child: Text(
             label,
-            style: TextStyle(
-                fontWeight: FontWeight.w700,
-                color: selected ? Colors.white : _textPrimary),
+            style: TextStyle(fontWeight: FontWeight.w700, color: selected ? Colors.white : _textPrimary),
           ),
         ),
       ),
     );
   }
 
-  Widget _card(
-      {required String title,
-      required IconData icon,
-      required Widget child}) {
+  Widget _card({required String title, required IconData icon, required Widget child}) {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: _cardBorder),
         borderRadius: BorderRadius.circular(14),
-        boxShadow: const [
-          BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))
-        ],
+        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(children: [
-              Icon(icon, size: 18, color: _blue),
-              const SizedBox(width: 6),
-              Text(title,
-                  style: const TextStyle(
-                      fontWeight: FontWeight.w800, color: _textPrimary)),
-            ]),
+            Row(
+              children: [
+                Icon(icon, size: 18, color: _blue),
+                const SizedBox(width: 6),
+                Text(title, style: const TextStyle(fontWeight: FontWeight.w800, color: _textPrimary)),
+              ],
+            ),
             const SizedBox(height: 12),
             child,
           ],
@@ -679,9 +626,7 @@ class _TrackingScreenState extends State<TrackingScreen>
         color: Colors.white,
         border: Border.all(color: _cardBorder),
         borderRadius: BorderRadius.circular(14),
-        boxShadow: const [
-          BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))
-        ],
+        boxShadow: const [BoxShadow(color: Color(0x0A000000), blurRadius: 8, offset: Offset(0, 2))],
       ),
       child: Padding(
         padding: const EdgeInsets.all(14),
@@ -691,20 +636,17 @@ class _TrackingScreenState extends State<TrackingScreen>
             // header
             Row(
               children: [
-                Text(v.plate.isEmpty ? v.id : v.plate,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                        color: _textPrimary)),
+                Text(
+                  v.plate.isEmpty ? v.id : v.plate,
+                  style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16, color: _textPrimary),
+                ),
                 const SizedBox(width: 8),
                 Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                   decoration: BoxDecoration(
                     color: _statusColor(v.status).withOpacity(.12),
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                        color: _statusColor(v.status).withOpacity(.25)),
+                    border: Border.all(color: _statusColor(v.status).withOpacity(.25)),
                   ),
                   child: Row(
                     children: [
@@ -712,50 +654,47 @@ class _TrackingScreenState extends State<TrackingScreen>
                         width: 8,
                         height: 8,
                         margin: const EdgeInsets.only(right: 6),
-                        decoration: BoxDecoration(
-                            color: _statusColor(v.status),
-                            shape: BoxShape.circle),
+                        decoration: BoxDecoration(color: _statusColor(v.status), shape: BoxShape.circle),
                       ),
-                      Text(_statusText(v.status),
-                          style: TextStyle(
-                              color: _statusColor(v.status),
-                              fontWeight: FontWeight.w700)),
+                      Text(
+                        _statusText(v.status),
+                        style: TextStyle(color: _statusColor(v.status), fontWeight: FontWeight.w700),
+                      ),
                     ],
                   ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
-            Text(v.driver,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700, color: _textPrimary)),
+            Text(v.driver, style: const TextStyle(fontWeight: FontWeight.w700, color: _textPrimary)),
             Row(
               children: [
                 const Icon(Icons.access_time, size: 16, color: _textMuted),
                 const SizedBox(width: 6),
-                Text('อัปเดต: ${_fmtTime(now)}  (${_ago(now)})',
-                    style: const TextStyle(color: _textMuted)),
+                Text('อัปเดต: ${_fmtTime(now)}  (${_ago(now)})', style: const TextStyle(color: _textMuted)),
               ],
             ),
             const SizedBox(height: 8),
-
+            Text(
+              "${getDropLocation(v.driver, v.plate, v.status, jobs) ?? 'ไม่พบปลายทาง'}",
+              style: const TextStyle(fontWeight: FontWeight.w700, color: _textPrimary),
+            ),
+            const SizedBox(height: 8),
             _infoRow(icon: Icons.navigation, label: 'ความเร็ว', value: speedText),
             if (_animPos[v.id] != null)
               _infoRow(
-                  icon: Icons.place,
-                  label: 'ตำแหน่ง',
-                  value:
-                      '${_animPos[v.id]!.latitude.toStringAsFixed(4)}, ${_animPos[v.id]!.longitude.toStringAsFixed(4)}'),
+                icon: Icons.place,
+                label: 'ตำแหน่ง',
+                value:
+                    '${_animPos[v.id]!.latitude.toStringAsFixed(4)}, ${_animPos[v.id]!.longitude.toStringAsFixed(4)}',
+              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _infoRow(
-      {required IconData icon,
-      required String label,
-      required String value}) {
+  Widget _infoRow({required IconData icon, required String label, required String value}) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 2),
       child: Row(
@@ -764,11 +703,7 @@ class _TrackingScreenState extends State<TrackingScreen>
           const SizedBox(width: 8),
           Text(label, style: const TextStyle(color: _textMuted)),
           const SizedBox(width: 6),
-          Expanded(
-            child: Text(value,
-                style: const TextStyle(
-                    fontWeight: FontWeight.w700, color: _textPrimary)),
-          ),
+          Expanded(child: Text(value, style: const TextStyle(fontWeight: FontWeight.w700, color: _textPrimary))),
         ],
       ),
     );
@@ -812,7 +747,7 @@ class _Dot extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: color.withOpacity(.15),     // วงนอก = สีสถานะจาง ๆ
+        color: color.withOpacity(.15), // วงนอก = สีสถานะจาง ๆ
         shape: BoxShape.circle,
       ),
       alignment: Alignment.center,
@@ -820,14 +755,11 @@ class _Dot extends StatelessWidget {
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: color,                    // วงใน = สีสถานะจริง (ไม่ใช่ Colors.green)
+          color: color, // วงใน = สีสถานะจริง (ไม่ใช่ Colors.green)
           shape: BoxShape.circle,
-          boxShadow: const [
-            BoxShadow(blurRadius: 6, spreadRadius: 1, offset: Offset(0, 2)),
-          ],
+          boxShadow: const [BoxShadow(blurRadius: 6, spreadRadius: 1, offset: Offset(0, 2))],
         ),
       ),
     );
   }
 }
-
