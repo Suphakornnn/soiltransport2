@@ -26,6 +26,8 @@ class SoilItem {
   double height;
   double fuelCost;
   DateTime createdAt;
+  String dropLocation;
+  String startLocation;
 
   SoilItem({
     required this.projectName,
@@ -39,6 +41,8 @@ class SoilItem {
     required this.height,
     required this.fuelCost,
     required this.createdAt,
+    required this.dropLocation,
+    required this.startLocation,
   });
 
   double get volume => width * length * height;
@@ -62,6 +66,8 @@ class SoilItem {
       'netPrice': netPrice,
       'createdAt': Timestamp.fromDate(createdAt),
       'timestamp': FieldValue.serverTimestamp(),
+      'dropLocation': dropLocation,
+      'startLocation': startLocation,
     };
   }
 }
@@ -104,6 +110,8 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
   final _lCtrl = TextEditingController(text: '8.0');
   final _hCtrl = TextEditingController(text: '1.5');
   final _fuelCostCtrl = TextEditingController(text: '0');
+  final _dropLocationCtrl = TextEditingController();
+  final _startLocationCtrl = TextEditingController();
 
   String _soilType = 'ดินดำ';
   String? _selectedPlate;
@@ -142,6 +150,8 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
     _fuelCostCtrl.dispose();
     _unitPriceCtrl.dispose();
     _searchCtrl.dispose();
+    _dropLocationCtrl.dispose();
+    _startLocationCtrl.dispose();
     super.dispose();
   }
 
@@ -194,6 +204,8 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
           height: (data['height'] as num).toDouble(),
           fuelCost: (data['fuelCost'] as num? ?? 0).toDouble(),
           createdAt: (data['createdAt'] as Timestamp).toDate(),
+          dropLocation: data['dropLocation'] ?? '',
+          startLocation: data['startLocation'] ?? '',
         ));
       }
 
@@ -261,6 +273,8 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
     _soilType = 'ดินดำ';
     _unitPriceCtrl.text = kSoilPrices['ดินดำ']!.toStringAsFixed(2);
     _fuelCostCtrl.text = '0';
+    _dropLocationCtrl.clear();
+    _startLocationCtrl.clear();
     _selectedDate = DateTime.now();
   }
 
@@ -339,6 +353,8 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
       height: height,
       fuelCost: fuelCost,
       createdAt: DateTime.now(),
+      dropLocation: _dropLocationCtrl.text.trim(),
+      startLocation: _startLocationCtrl.text.trim(),
     );
 
     setState(() {
@@ -948,6 +964,26 @@ Future<void> _exportToExcel() async {
             decoration: const InputDecoration(
               labelText: 'ค่าน้ำมัน (฿)',
               hintText: '0',
+            ),
+          ),
+        ),
+        SizedBox(
+          width: isWide ? 200 : double.infinity,
+          child: TextField(
+            controller: _startLocationCtrl,
+            decoration: const InputDecoration(
+              labelText: 'จุดรับดิน',
+              hintText: 'ระบุสถานที่รับดิน',
+            ),
+          ),
+        ),
+        SizedBox(
+          width: isWide ? 200 : double.infinity,
+          child: TextField(
+            controller: _dropLocationCtrl,
+            decoration: const InputDecoration(
+              labelText: 'จุดส่งดิน',
+              hintText: 'ระบุสถานที่ส่งดิน',
             ),
           ),
         ),
