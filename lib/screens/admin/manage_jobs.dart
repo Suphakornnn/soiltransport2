@@ -1613,9 +1613,9 @@ class _JobFormDialogState extends State<_JobFormDialog> {
   int fuelBaht = 0;
   int incomeBaht = 0; // เพิ่มจาก reports_jobs
   String note = '';
-  final _driverCtrl = TextEditingController();
   String? _generatedCode;
   List<Truck> trucks = [];
+  final _plateCtrl = TextEditingController();
 
   // palette
   static const _blue = Color(0xFF2563EB);
@@ -1631,6 +1631,7 @@ class _JobFormDialogState extends State<_JobFormDialog> {
     status = j?.status ?? JobStatus.pending;
     drivers.addAll(j?.drivers ?? []);
     plate = j?.plate ?? '';
+    _plateCtrl.text = plate;
     dropLocation = j?.dropLocation ?? '';
     start = j?.start;
     end = j?.end;
@@ -1645,6 +1646,12 @@ class _JobFormDialogState extends State<_JobFormDialog> {
     if (j == null) {
       _generateCode();
     }
+  }
+
+  @override
+  void dispose() {
+    _plateCtrl.dispose();
+    super.dispose();
   }
 
   Future<void> _getTrucks() async {
@@ -1807,9 +1814,11 @@ class _JobFormDialogState extends State<_JobFormDialog> {
 
                 // ทะเบียน / สถานที่
                 TextFormField(
-                  initialValue: plate,
-                  onChanged: (v) => plate = v,
-                  decoration: _dec('ทะเบียนรถ'),
+                  controller: _plateCtrl,
+                  enabled: false,
+                  decoration: _dec('ทะเบียนรถ').copyWith(
+                    suffixIcon: const Icon(Icons.lock_outline, size: 16),
+                  ),
                 ),
                 const SizedBox(height: 8),
                 TextFormField(
@@ -2065,7 +2074,18 @@ class _JobFormDialogState extends State<_JobFormDialog> {
                     .toList(),
                 onChanged: (value) {
                   if (value != null && !drivers.contains(value)) {
-                    setState(() => drivers.add(value));
+                    setState(() {
+                      drivers.add(value);
+                      // ทะเบียนรถจะถูกกำหนดจากคนขับคนแรกเท่านั้น
+                      if (drivers.length == 1) {
+                        final truck = trucks.firstWhere(
+                          (t) => t.driver == value,
+                          orElse: () => trucks.first,
+                        );
+                        plate = truck.plate;
+                        _plateCtrl.text = plate;
+                      }
+                    });
                   }
                 },
               ),
