@@ -1,0 +1,49 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+    id 'dev.flutter.flutter-gradle-plugin'
+    id 'com.google.gms.google-services'   // ลบได้ถ้าไม่ใช้ Firebase
+    // id 'com.google.firebase.crashlytics'
+}
+
+android {
+    namespace 'com.example.soil_transport_app_with_firebase'
+    compileSdkVersion flutter.compileSdkVersion
+    ndkVersion flutter.ndkVersion
+
+    defaultConfig {
+        applicationId 'com.example.soil_transport_app_with_firebase'
+        minSdkVersion flutter.minSdkVersion
+        targetSdkVersion flutter.targetSdkVersion
+        versionCode 1
+        versionName '1.0.0'
+        // multiDexEnabled true   // เปิดถ้าเจอ 64K methods
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    // ใช้ Java 17 ทั้งหมด
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    // <<< จุดที่พัง แก้เป็นบล็อกเต็ม ๆ แบบนี้
+    sourceSets {
+        main {
+            java.srcDirs += 'src/main/kotlin'
+        }
+    }
+}
+
+dependencies {
+    // ใส่เมื่อเปิด multidex ข้างบน
+    // implementation 'androidx.multidex:multidex:2.0.1'
+}

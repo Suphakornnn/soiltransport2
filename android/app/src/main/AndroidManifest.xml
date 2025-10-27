@@ -1,0 +1,62 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- ── Permissions (ต้องอยู่ใน <manifest> นอก <application>) ─────────── -->
+    <!-- เน็ตสำหรับโหลดแผนที่ OSM + ยิง Firestore -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- ตำแหน่ง (จำเป็น) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- แจ้งเตือน (ถ้ามีการแสดง notification) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- อ่านรูป (ถ้าแอปมีอัปโหลดรูปจากแกลเลอรี) -->
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <!-- กรณีจะใช้งานอัปเดตตำแหน่งต่อเนื่องในโหมด foreground service -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
+    <!-- ถ้าต้องการ track ต่อแม้อยู่นอกจอจริง ๆ (background location) ให้ปลดคอมเมนต์บรรทัดนี้ 
+         และรองรับบน Android 10+ ด้วยการอธิบายเหตุผลใน UX เพิ่มเติม -->
+    <!-- <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" /> -->
+
+    <!-- บอกว่าอุปกรณ์อาจไม่มี GPS ก็รันได้ -->
+    <uses-feature
+        android:name="android.hardware.location.gps"
+        android:required="false" />
+
+    <!-- ── Application ────────────────────────────────────────────────────── -->
+    <application
+        android:name="${applicationName}"
+        android:label="Soil Transport"
+        android:icon="@mipmap/ic_launcher">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:launchMode="singleTop"
+            android:theme="@style/LaunchTheme"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
+            android:hardwareAccelerated="true"
+            android:windowSoftInputMode="adjustResize">
+
+            <!-- Theme ปกติหลัง splash -->
+            <meta-data
+                android:name="io.flutter.embedding.android.NormalTheme"
+                android:resource="@style/NormalTheme" />
+
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- ตัวบอกว่าใช้ embedding v2 -->
+        <meta-data
+            android:name="flutterEmbedding"
+            android:value="2" />
+    </application>
+</manifest>
