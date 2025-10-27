@@ -21,4 +21,6 @@ class VehicleService {
       'lastUpdate': FieldValue.serverTimestamp(),
     }, SetOptions(merge: true));
   }
+
+
 }
