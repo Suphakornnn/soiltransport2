@@ -4,6 +4,7 @@ import 'package:flutter/painting.dart' as painting;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:soil_transport_app/models/job2_model.dart';
 import 'package:soil_transport_app/models/job_status.dart';
+import 'package:soil_transport_app/models/date_filter.dart';
 import 'package:soil_transport_app/screens/admin/manage_jobs.dart';
 import 'package:soil_transport_app/services/job_service.dart';
 import 'package:soil_transport_app/utils.dart';
@@ -120,18 +121,31 @@ class _ReportsScreenState extends State<ReportsScreen> {
                 )
                 .toList();
       }
-      // date filter (ง่ายๆตามตัวเลือก)
-      final now = DateTime.now();
-      DateTime? from;
-      if (_dateFilter == 'วันนี้') {
-        from = DateTime(now.year, now.month, now.day);
-      } else if (_dateFilter == 'สัปดาห์นี้') {
-        from = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
-      } else if (_dateFilter == 'เดือนนี้') {
-        from = DateTime(now.year, now.month, 1);
-      }
-      if (from != null) {
-        reports = reports.toList();
+      // date filter
+      if (_dateFilter.dateFilter != null && _dateFilter.dateFilter != DateFilter.all) {
+        final now = DateTime.now();
+        DateTime? from;
+
+        switch (_dateFilter.dateFilter!) {
+          case DateFilter.today:
+            from = DateTime(now.year, now.month, now.day);
+            break;
+          case DateFilter.thisWeek:
+            from = DateTime(now.year, now.month, now.day).subtract(Duration(days: now.weekday - 1));
+            break;
+          case DateFilter.thisMonth:
+            from = DateTime(now.year, now.month, 1);
+            break;
+          case DateFilter.all:
+            break;
+        }
+
+        if (from != null) {
+          reports = reports.where((r) {
+            final date = getDateTime(r['date']);
+            return date.isAfter(from!) || date.isAtSameMomentAs(from);
+          }).toList();
+        }
       }
 
       if (_statusFilter.status != null) {
