@@ -156,7 +156,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
       for (final doc in jobsSnapshot.docs) {
         final data = doc.data();
-        final projectName = data['projectName'] ?? data['project'] ?? 'ไม่มีชื่อโครงการ';
+        final projectName = data['code'] ?? 'ไม่มีชื่อโครงการ';
         final status = data['status'] ?? 'unknown';
         final createdAt = data['createdAt'] as Timestamp?;
 
