@@ -220,7 +220,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   void _refreshData() => _fetchAllData();
 
-  static const double kJobCardMinHeight = 240;
+  static const double kJobCardMinHeight = 185;
   static const double kChartHeight = 250;
 
   @override
@@ -595,7 +595,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
               ),
               const SizedBox(height: 2),
               Text(
-                '${e['driver']} • ${e['plate']}',
+                '${e['drivers'].join(', ')} • ${e['plate']}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: Colors.black54),
@@ -617,8 +617,11 @@ class _ReportsScreenState extends State<ReportsScreen> {
                             const SizedBox(width: 6),
                             Text(_thDate(getDateTime(e['date']))),
                             const SizedBox(width: 8),
-                            if (e['start'] != '—')
-                              Text('${e['start']} - ${e['end'] ?? ''}', style: const TextStyle(color: Colors.black54)),
+                            if (e['startTime'] != '—')
+                              Text(
+                                '${e['startTime']} - ${e['endTime'] ?? ''}',
+                                style: const TextStyle(color: Colors.black54),
+                              ),
                           ],
                         ),
                         const SizedBox(height: 6),
@@ -627,21 +630,34 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           children: [
                             const Icon(Icons.place, size: 18, color: Colors.black54),
                             const SizedBox(width: 6),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('จาก: ${e['from']}', maxLines: 1, overflow: TextOverflow.ellipsis),
-                                  Text('ไป: ${e['to']}', maxLines: 1, overflow: TextOverflow.ellipsis),
-                                  Text(
-                                    '${e['distance']} กม. • ${e['unit']}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: Colors.black54),
-                                  ),
-                                ],
-                              ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('จาก: ${e['startLocation'] ?? '-'}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                Text('ไป: ${e['dropLocation'] ?? '-'}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                                // Text(
+                                //   '${e['distance']} กม. • ${e['unit']}',
+                                //   maxLines: 1,
+                                //   overflow: TextOverflow.ellipsis,
+                                //   style: const TextStyle(color: Colors.black54),
+                                // ),
+                              ],
                             ),
+                            // Expanded(
+                            //   child: Column(
+                            //     crossAxisAlignment: CrossAxisAlignment.start,
+                            //     children: [
+                            //       Text('จาก: ${e['startLocation'] ?? '-'}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            //       Text('ไป: ${e['dropLocation'] ?? '-'}', maxLines: 1, overflow: TextOverflow.ellipsis),
+                            //       // Text(
+                            //       //   '${e['distance']} กม. • ${e['unit']}',
+                            //       //   maxLines: 1,
+                            //       //   overflow: TextOverflow.ellipsis,
+                            //       //   style: const TextStyle(color: Colors.black54),
+                            //       // ),
+                            //     ],
+                            //   ),
+                            // ),
                           ],
                         ),
                       ],

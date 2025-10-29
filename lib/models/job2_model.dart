@@ -4,6 +4,7 @@ class Job2Model {
   final String? note;
   final String? code;
   final String? dropLocation;
+  final String? startLocation;
   final String? plate;
   final double? pricePerTrip;
   final dynamic createdAt;
@@ -22,6 +23,7 @@ class Job2Model {
     this.note,
     this.code,
     this.dropLocation,
+    this.startLocation,
     this.plate,
     this.pricePerTrip,
     this.createdAt,
@@ -42,6 +44,7 @@ class Job2Model {
       note: json['note'] as String?,
       code: json['code'] as String?,
       dropLocation: json['dropLocation'] as String?,
+      startLocation: json['startLocation'] as String?,
       plate: json['plate'] as String?,
       pricePerTrip: json['pricePerTrip'] != null ? (json['pricePerTrip'] as num).toDouble() : null,
       createdAt: json['createdAt'] as dynamic,
@@ -63,6 +66,7 @@ class Job2Model {
       if (note != null) 'note': note,
       if (code != null) 'code': code,
       if (dropLocation != null) 'dropLocation': dropLocation,
+      if (startLocation != null) 'startLocation': startLocation,
       if (plate != null) 'plate': plate,
       if (pricePerTrip != null) 'pricePerTrip': pricePerTrip,
       if (createdAt != null) 'createdAt': createdAt,
