@@ -227,6 +227,7 @@ class _JobList extends StatelessWidget {
             'code': data['code'] ?? '',
             'plate': data['plate'] ?? '',
             'dropLocation': data['dropLocation'] ?? '',
+            'startLocation': data['startLocation'] ?? '',
             'status': data['status'] ?? 'pending',
             'trips': (data['trips'] as num?)?.toInt() ?? 0,
             'pricePerTrip': (data['pricePerTrip'] as num?)?.toDouble() ?? 0.0,
