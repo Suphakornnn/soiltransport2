@@ -141,23 +141,20 @@ class _ReportsScreenState extends State<ReportsScreen> {
     }
   }
 
-
   Future<void> _fetchSummaryData() async {
     try {
-      final jobsSnapshot = await FirebaseFirestore.instance.collection('jobs').get();
-      int totalJobs = jobsSnapshot.docs.length;
-      int completedJobs = 0;
-      for (final doc in jobsSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        if ((data['status'] as String?) == 'done') completedJobs++;
-      }
+      final allJobs = await MyJob().getAllJobs();
 
+      int totalJobs = allJobs.length;
+      int completedJobs = 0;
       double totalFuel = 0, totalIncome = 0;
       int totalTrips = 0;
-      for (Job2Model job in jobs) {
-        totalFuel += ((job.fuelBaht ?? 0) as num).toDouble();
-        totalIncome += ((job.incomeBaht ?? 0) as num).toDouble();
-        totalTrips += (job.trips ?? 0) as int;
+
+      for (Job2Model job in allJobs) {
+        if (job.status == 'done') completedJobs++;
+        totalFuel += job.fuelBaht ?? 0;
+        totalIncome += job.incomeBaht ?? 0;
+        totalTrips += job.trips ?? 0;
       }
 
       setState(() {
@@ -172,36 +169,23 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   Future<void> _fetchDailySummary() async {
     try {
+      final allJobs = await MyJob().getAllJobs();
       final today = DateTime.now();
       final start = DateTime(today.year, today.month, today.day);
       final end = DateTime(today.year, today.month, today.day, 23, 59, 59);
 
-      final reportsSnapshot =
-          await FirebaseFirestore.instance
-              .collection('jobs')
-              .where('date', isGreaterThanOrEqualTo: start)
-              .where('date', isLessThanOrEqualTo: end)
-              .get();
-
-      double todayFuel = 0, todayIncome = 0;
-      for (final doc in reportsSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        todayFuel += ((data['fuelBaht'] ?? 0) as num).toDouble();
-        todayIncome += ((data['IncomeBaht'] ?? 0) as num).toDouble();
-      }
-
-      final jobsSnapshot =
-          await FirebaseFirestore.instance
-              .collection('jobs')
-              .where('date', isGreaterThanOrEqualTo: start)
-              .where('date', isLessThanOrEqualTo: end)
-              .get();
-
-      int todayJobs = jobsSnapshot.docs.length;
+      int todayJobs = 0;
       int todayCompletedJobs = 0;
-      for (final doc in jobsSnapshot.docs) {
-        final data = doc.data() as Map<String, dynamic>? ?? {};
-        if ((data['status'] as String?) == 'done') todayCompletedJobs++;
+      double todayFuel = 0, todayIncome = 0;
+
+      for (Job2Model job in allJobs) {
+        final jobDate = job.date;
+        if (jobDate != null && jobDate.isAfter(start) && jobDate.isBefore(end)) {
+          todayJobs++;
+          if (job.status == 'done') todayCompletedJobs++;
+          todayFuel += ((job.fuelBaht ?? 0) as num).toDouble();
+          todayIncome += ((job.incomeBaht ?? 0) as num).toDouble();
+        }
       }
 
       setState(() {
@@ -217,10 +201,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
 
   void _setDefaultDailySummary() {
     setState(() {
-      _todayJobs = _reports.length;
-      _todayCompletedJobs = _reports.where((r) => r['status'] == 'เสร็จสิ้น').length;
-      _todayFuel = _reports.fold(0.0, (s, r) => s + (r['fuel'] as double));
-      _todayIncome = _reports.fold(0.0, (s, r) => s + (r['income'] as double));
+      _todayJobs = 0;
+      _todayCompletedJobs = 0;
+      _todayFuel = 0;
+      _todayIncome = 0;
     });
   }
 
@@ -298,14 +282,14 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         ],
                       ),
                       const SizedBox(height: 12),
-                  
+
                       // Filters (เดิมเป็น Row → เปลี่ยนเป็น Wrap เพื่อตัดล้นอัตโนมัติ)
                       LayoutBuilder(
                         builder: (context, c) {
                           final maxW = c.maxWidth;
                           final isNarrow = maxW < 700;
                           final half = (maxW - 12) / 2;
-                  
+
                           return Wrap(
                             spacing: 12,
                             runSpacing: 12,
@@ -393,7 +377,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         },
                       ),
                       const SizedBox(height: 16),
-                  
+
                       // Job cards + pagination
                       if (_reports.isNotEmpty) ...[
                         LayoutBuilder(
@@ -412,7 +396,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                         const SizedBox(height: 16),
                       ] else
                         _emptyBox(),
-                  
+
                       LayoutBuilder(
                         builder: (context, c) {
                           final isNarrow = c.maxWidth < 700;
@@ -430,10 +414,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                                   child: SizedBox(
                                     height: kChartHeight,
                                     child: _PieChart(
-                                      statusMap: {
-                                        'done': _completedJobs,
-                                        'pending': _totalJobs - _completedJobs,
-                                      },
+                                      statusMap: {'done': _completedJobs, 'pending': _totalJobs - _completedJobs},
                                     ),
                                   ),
                                 ),
@@ -442,7 +423,7 @@ class _ReportsScreenState extends State<ReportsScreen> {
                           );
                         },
                       ),
-                  
+
                       const SizedBox(height: 60),
                     ],
                   ),
@@ -929,10 +910,7 @@ class _PiePainter extends CustomPainter {
     final radius = rect.shortestSide / 2;
 
     const order = ['done', 'pending'];
-    final colors = {
-      'done': const Color(0xFF16A34A),
-      'pending': _blue,
-    };
+    final colors = {'done': const Color(0xFF16A34A), 'pending': _blue};
 
     double startDeg = -90;
     final sectorPaint = Paint()..style = PaintingStyle.fill;
@@ -1045,14 +1023,8 @@ class _PieLegend extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     const order = ['done', 'pending'];
-    final colors = {
-      'done': const Color(0xFF16A34A),
-      'pending': _blue,
-    };
-    final labels = {
-      'done': 'เสร็จสิ้น',
-      'pending': 'รอดำเนินการ',
-    };
+    final colors = {'done': const Color(0xFF16A34A), 'pending': _blue};
+    final labels = {'done': 'เสร็จสิ้น', 'pending': 'รอดำเนินการ'};
 
     return Wrap(
       alignment: WrapAlignment.center,

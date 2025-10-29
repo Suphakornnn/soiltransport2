@@ -7,7 +7,7 @@ class Job2Model {
   final String? plate;
   final double? pricePerTrip;
   final dynamic createdAt;
-  final double? trips;
+  final int? trips;
   final String? startTime;
   final double? fuelBaht;
   final double? incomeBaht;
@@ -45,7 +45,7 @@ class Job2Model {
       plate: json['plate'] as String?,
       pricePerTrip: json['pricePerTrip'] != null ? (json['pricePerTrip'] as num).toDouble() : null,
       createdAt: json['createdAt'] as dynamic,
-      trips: json['trips'] != null ? (json['trips'] as num).toDouble() : null,
+      trips: json['trips'] != null ? (json['trips'] as num).toInt() : null,
       startTime: json['startTime'] as String?,
       fuelBaht: json['fuelBaht'] != null ? (json['fuelBaht'] as num).toDouble() : null,
       incomeBaht: json['IncomeBaht'] != null ? (json['IncomeBaht'] as num).toDouble() : null,
