@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/painting.dart' as painting;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:soil_transport_app/models/job2_model.dart';
+import 'package:soil_transport_app/models/job_status.dart';
+import 'package:soil_transport_app/screens/admin/manage_jobs.dart';
 import 'package:soil_transport_app/services/job_service.dart';
 import 'package:soil_transport_app/utils.dart';
 
@@ -130,6 +132,10 @@ class _ReportsScreenState extends State<ReportsScreen> {
       }
       if (from != null) {
         reports = reports.toList();
+      }
+
+      if (_statusFilter.status != null) {
+        reports = reports.where((r) => r['status'] == _statusFilter.status?.name).toList();
       }
 
       // pagination
