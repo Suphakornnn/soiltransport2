@@ -142,6 +142,7 @@ class _UserEditScreenState extends State<UserEditScreen> {
                           decoration: _dec('ทะเบียนรถ'),
                         ),
                         const SizedBox(height: 12),
+                        Text('hi'),
                         DropdownButtonFormField<String>(
                           value: status,
                           items: const [

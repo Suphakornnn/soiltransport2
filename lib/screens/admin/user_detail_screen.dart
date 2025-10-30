@@ -1,5 +1,7 @@
 // lib/screens/admin/user_detail_screen.dart
 import 'package:flutter/material.dart';
+import 'package:soil_transport_app/models/driver_status.dart';
+import 'package:soil_transport_app/services/vehicle_service.dart';
 
 class UserDetailScreen extends StatefulWidget {
   final Map<String, dynamic> user;
@@ -13,6 +15,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
   late final TextEditingController _nameCtrl;
   late final TextEditingController _plateCtrl;
   String _status = 'พร้อมใช้งาน';
+  final _vehicleService = VehicleService();
 
   @override
   void initState() {
@@ -29,16 +32,28 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     super.dispose();
   }
 
-  void _save() {
+  Future<void> _save() async {
+    final vehicleId = widget.user['vehicleId'];
+    if (vehicleId != null) {
+      await _vehicleService.updateVehicle(
+        vehicleId: vehicleId,
+        plate: _plateCtrl.text.trim(),
+        driverName: _nameCtrl.text.trim(),
+        status: _status,
+      );
+    }
+
     final updated = Map<String, dynamic>.from(widget.user);
     updated['name']   = _nameCtrl.text.trim();
     updated['plate']  = _plateCtrl.text.trim();
-    updated['status'] = _status;
+    updated['status'] = driverStatusToEng(_status);
 
-    Navigator.pop(context, updated);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('บันทึกข้อมูลแล้ว')),
-    );
+    if (mounted) {
+      Navigator.pop(context, updated);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('บันทึกข้อมูลแล้ว')),
+      );
+    }
   }
 
   // ===== Avatar อักษรแรก (แทนการใช้รูป) =====
@@ -154,6 +169,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                           'พร้อมใช้งาน',
                           'กำลังซ่อม',
                           'ไม่พร้อมใช้งาน',
+                          'กำลังทำงาน',
                         ].map((e) => DropdownMenuItem(value: e, child: Text(e))).toList(),
                         onChanged: (v) => setState(() => _status = v ?? _status),
                         decoration: _inputDeco('เลือกสถานะ'),

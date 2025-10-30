@@ -426,8 +426,11 @@ class _UserCard extends StatelessWidget {
                         _plateChip(plate),
                         const Spacer(),
                         OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => UserDetailScreen(user: user)));
+                          onPressed: () async {
+                            final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => UserDetailScreen(user: user)));
+                            if (result != null && context.mounted) {
+                              (context.findAncestorStateOfType<_ManageUsersState>())?._fetchDrivers();
+                            }
                           },
                           icon: const Icon(Icons.info_outline, size: 18, color: _blue),
                           label: const Text('เพิ่มเติม', style: TextStyle(color: _blue, fontWeight: FontWeight.w700)),
@@ -479,8 +482,11 @@ class _UserCard extends StatelessWidget {
               ),
             ),
             FilledButton.icon(
-              onPressed: () {
-                Navigator.push(context, MaterialPageRoute(builder: (_) => UserDetailScreen(user: user)));
+              onPressed: () async {
+                final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => UserDetailScreen(user: user)));
+                if (result != null && context.mounted) {
+                  (context.findAncestorStateOfType<_ManageUsersState>())?._fetchDrivers();
+                }
               },
               icon: const Icon(Icons.info_outline),
               label: const Text('เพิ่มเติม'),
