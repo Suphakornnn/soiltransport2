@@ -298,6 +298,11 @@ class _DriverJobDetailScreenState extends State<DriverJobDetailScreen> {
                       ),
                       _InfoRow(
                         icon: Icons.location_on,
+                        label: 'ต้นทาง',
+                        value: _job['startLocation'] ?? '-',
+                      ),
+                      _InfoRow(
+                        icon: Icons.location_on,
                         label: 'ปลายทาง',
                         value: _job['dropLocation'] ?? '-',
                       ),

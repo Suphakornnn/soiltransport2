@@ -7,12 +7,7 @@ import 'package:file_saver/file_saver.dart';
 import 'dart:typed_data';
 
 // ====== ราคาเริ่มต้นต่อหน่วย (฿/ลบ.ม.) ตามประเภทดิน ======
-const Map<String, double> kSoilPrices = {
-  'ดินดำ': 180,
-  'ดินซีแลค': 220,
-  'ลูกรัง': 250,
-  'หินคลุก': 300,
-};
+const Map<String, double> kSoilPrices = {'ดินดำ': 180, 'ดินซีแลค': 220, 'ลูกรัง': 250, 'หินคลุก': 300};
 
 class SoilItem {
   String projectName;
@@ -26,6 +21,8 @@ class SoilItem {
   double height;
   double fuelCost;
   DateTime createdAt;
+  String dropLocation;
+  String startLocation;
 
   SoilItem({
     required this.projectName,
@@ -39,6 +36,8 @@ class SoilItem {
     required this.height,
     required this.fuelCost,
     required this.createdAt,
+    required this.dropLocation,
+    required this.startLocation,
   });
 
   double get volume => width * length * height;
@@ -62,6 +61,8 @@ class SoilItem {
       'netPrice': netPrice,
       'createdAt': Timestamp.fromDate(createdAt),
       'timestamp': FieldValue.serverTimestamp(),
+      'dropLocation': dropLocation,
+      'startLocation': startLocation,
     };
   }
 }
@@ -70,10 +71,7 @@ class ProjectSummary {
   String projectName;
   List<SoilItem> items;
 
-  ProjectSummary({
-    required this.projectName,
-    required this.items,
-  });
+  ProjectSummary({required this.projectName, required this.items});
 
   double get totalVolume => items.fold(0.0, (sum, item) => sum + (item.volume * item.tripCount));
   double get totalSoilPrice => items.fold(0.0, (sum, item) => sum + item.soilPrice);
@@ -104,6 +102,8 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
   final _lCtrl = TextEditingController(text: '8.0');
   final _hCtrl = TextEditingController(text: '1.5');
   final _fuelCostCtrl = TextEditingController(text: '0');
+  final _dropLocationCtrl = TextEditingController();
+  final _startLocationCtrl = TextEditingController();
 
   String _soilType = 'ดินดำ';
   String? _selectedPlate;
@@ -142,6 +142,8 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
     _fuelCostCtrl.dispose();
     _unitPriceCtrl.dispose();
     _searchCtrl.dispose();
+    _dropLocationCtrl.dispose();
+    _startLocationCtrl.dispose();
     super.dispose();
   }
 
@@ -174,27 +176,29 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
         _isLoading = true;
       });
 
-      final querySnapshot = await _firestore
-          .collection('soil_calculations')
-          .orderBy('timestamp', descending: true)
-          .get();
+      final querySnapshot =
+          await _firestore.collection('soil_calculations').orderBy('timestamp', descending: true).get();
 
       final items = <SoilItem>[];
       for (final doc in querySnapshot.docs) {
         final data = doc.data();
-        items.add(SoilItem(
-          projectName: data['projectName'] ?? '',
-          plate: data['plate'] ?? '',
-          startDate: (data['startDate'] as Timestamp).toDate(),
-          tripCount: (data['tripCount'] as num).toInt(),
-          soilType: data['soilType'] ?? '',
-          unitPrice: (data['unitPrice'] as num).toDouble(),
-          width: (data['width'] as num).toDouble(),
-          length: (data['length'] as num).toDouble(),
-          height: (data['height'] as num).toDouble(),
-          fuelCost: (data['fuelCost'] as num? ?? 0).toDouble(),
-          createdAt: (data['createdAt'] as Timestamp).toDate(),
-        ));
+        items.add(
+          SoilItem(
+            projectName: data['projectName'] ?? '',
+            plate: data['plate'] ?? '',
+            startDate: (data['startDate'] as Timestamp).toDate(),
+            tripCount: (data['tripCount'] as num).toInt(),
+            soilType: data['soilType'] ?? '',
+            unitPrice: (data['unitPrice'] as num).toDouble(),
+            width: (data['width'] as num).toDouble(),
+            length: (data['length'] as num).toDouble(),
+            height: (data['height'] as num).toDouble(),
+            fuelCost: (data['fuelCost'] as num? ?? 0).toDouble(),
+            createdAt: (data['createdAt'] as Timestamp).toDate(),
+            dropLocation: data['dropLocation'] ?? '',
+            startLocation: data['startLocation'] ?? '',
+          ),
+        );
       }
 
       setState(() {
@@ -261,6 +265,8 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
     _soilType = 'ดินดำ';
     _unitPriceCtrl.text = kSoilPrices['ดินดำ']!.toStringAsFixed(2);
     _fuelCostCtrl.text = '0';
+    _dropLocationCtrl.clear();
+    _startLocationCtrl.clear();
     _selectedDate = DateTime.now();
   }
 
@@ -276,16 +282,12 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
     final plate = _selectedPlate;
 
     if (projectName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('กรอกชื่อโครงการก่อน')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('กรอกชื่อโครงการก่อน')));
       return;
     }
 
     if (plate == null || plate.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('เลือกทะเบียนรถก่อน')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('เลือกทะเบียนรถก่อน')));
       return;
     }
 
@@ -297,35 +299,26 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
     final fuelCost = _parseDouble(_fuelCostCtrl.text, 0);
 
     if (tripCount <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('จำนวนเที่ยวต้องมากกว่า 0')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('จำนวนเที่ยวต้องมากกว่า 0')));
       return;
     }
 
     if (width <= 0 || length <= 0 || height <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ค่ากว้าง/ยาว/สูง ต้องมากกว่า 0')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ค่ากว้าง/ยาว/สูง ต้องมากกว่า 0')));
       return;
     }
 
     if (unitPrice <= 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ราคาดินต่อหน่วย ต้องมากกว่า 0')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ราคาดินต่อหน่วย ต้องมากกว่า 0')));
       return;
     }
 
     if (fuelCost < 0) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ค่าน้ำมันต้องไม่ต่ำกว่า 0')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ค่าน้ำมันต้องไม่ต่ำกว่า 0')));
       return;
     }
 
-    final existingIndex = _previewItems.indexWhere((item) =>
-        item.projectName == projectName && item.plate == plate);
+    final existingIndex = _previewItems.indexWhere((item) => item.projectName == projectName && item.plate == plate);
 
     final newItem = SoilItem(
       projectName: projectName,
@@ -339,6 +332,8 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
       height: height,
       fuelCost: fuelCost,
       createdAt: DateTime.now(),
+      dropLocation: _dropLocationCtrl.text.trim(),
+      startLocation: _startLocationCtrl.text.trim(),
     );
 
     setState(() {
@@ -351,9 +346,9 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
 
     _clearForm();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(existingIndex >= 0 ? 'อัพเดทข้อมูลเรียบร้อย' : 'เพิ่มข้อมูลเรียบร้อย')),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(existingIndex >= 0 ? 'อัพเดทข้อมูลเรียบร้อย' : 'เพิ่มข้อมูลเรียบร้อย')));
   }
 
   void _removeFromPreview(int index) {
@@ -361,16 +356,12 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
       _previewItems.removeAt(index);
     });
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('ลบรายการเรียบร้อย')),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ลบรายการเรียบร้อย')));
   }
 
   Future<void> _saveToFirebase() async {
     if (_previewItems.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ไม่มีข้อมูลที่จะบันทึก')),
-      );
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ไม่มีข้อมูลที่จะบันทึก')));
       return;
     }
 
@@ -384,157 +375,156 @@ class _SoilCalculatorScreenState extends State<SoilCalculatorScreen> {
 
       await batch.commit();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('บันทึกข้อมูล ${_previewItems.length} รายการเรียบร้อย')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('บันทึกข้อมูล ${_previewItems.length} รายการเรียบร้อย')));
 
       setState(() {
         _previewItems.clear();
       });
       await _loadSoilCalculations();
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
+    }
+  }
+
+  // ---------- EXCEL EXPORT (fixed name & path logging) ----------
+  Future<void> _exportToExcel() async {
+    try {
+      final excel = Excel.createExcel();
+      final sheet = excel['คำนวณปริมาณดิน'];
+
+      // ===== Header =====
+      final headers = [
+        'โครงการ',
+        'ทะเบียนรถ',
+        'วันที่เริ่ม',
+        'จำนวนเที่ยว',
+        'ประเภทดิน',
+        'กว้าง (ม.)',
+        'ยาว (ม.)',
+        'สูง (ม.)',
+        'ปริมาตร (ลบ.ม.)',
+        'ราคาต่อหน่วย',
+        'ราคาดินรวม',
+        'ค่าน้ำมัน',
+        'เงินสุทธิ',
+      ];
+      for (int i = 0; i < headers.length; i++) {
+        sheet.cell(CellIndex.indexByString('${String.fromCharCode(65 + i)}1'))
+          ..value = headers[i]
+          ..cellStyle = CellStyle(bold: true, backgroundColorHex: '#E8F5E8');
+      }
+
+      // ===== Rows =====
+      final allItems = [..._savedItems, ..._previewItems];
+      for (int i = 0; i < allItems.length; i++) {
+        final it = allItems[i];
+        final r = i + 2;
+        sheet.cell(CellIndex.indexByString('A$r')).value = it.projectName;
+        sheet.cell(CellIndex.indexByString('B$r')).value = it.plate;
+        sheet.cell(CellIndex.indexByString('C$r')).value = _fmtDate.format(it.startDate);
+        sheet.cell(CellIndex.indexByString('D$r')).value = it.tripCount;
+        sheet.cell(CellIndex.indexByString('E$r')).value = it.soilType;
+        sheet.cell(CellIndex.indexByString('F$r')).value = it.width;
+        sheet.cell(CellIndex.indexByString('G$r')).value = it.length;
+        sheet.cell(CellIndex.indexByString('H$r')).value = it.height;
+        sheet.cell(CellIndex.indexByString('I$r')).value = it.volume;
+        sheet.cell(CellIndex.indexByString('J$r')).value = it.unitPrice;
+        sheet.cell(CellIndex.indexByString('K$r')).value = it.soilPrice;
+        sheet.cell(CellIndex.indexByString('L$r')).value = it.fuelCost;
+        sheet.cell(CellIndex.indexByString('M$r')).value = it.netPrice;
+      }
+
+      // ===== Summary by project =====
+      final summaryRow = allItems.length + 3;
+      sheet.cell(CellIndex.indexByString('A$summaryRow')).value = 'สรุปตามโครงการ';
+      sheet.cell(CellIndex.indexByString('A${summaryRow + 1}')).value = 'โครงการ';
+      sheet.cell(CellIndex.indexByString('B${summaryRow + 1}')).value = 'จำนวนรถ';
+      sheet.cell(CellIndex.indexByString('C${summaryRow + 1}')).value = 'เที่ยวทั้งหมด';
+      sheet.cell(CellIndex.indexByString('D${summaryRow + 1}')).value = 'ปริมาตรรวม';
+      sheet.cell(CellIndex.indexByString('E${summaryRow + 1}')).value = 'ราคาดินรวม';
+      sheet.cell(CellIndex.indexByString('F${summaryRow + 1}')).value = 'ค่าน้ำมันรวม';
+      sheet.cell(CellIndex.indexByString('G${summaryRow + 1}')).value = 'เงินสุทธิ';
+
+      int idx = 0;
+      for (final p in _projectSummaries) {
+        final r = summaryRow + 2 + idx++;
+        sheet.cell(CellIndex.indexByString('A$r')).value = p.projectName;
+        sheet.cell(CellIndex.indexByString('B$r')).value = p.vehicleCount;
+        sheet.cell(CellIndex.indexByString('C$r')).value = p.totalTrips;
+        sheet.cell(CellIndex.indexByString('D$r')).value = p.totalVolume;
+        sheet.cell(CellIndex.indexByString('E$r')).value = p.totalSoilPrice;
+        sheet.cell(CellIndex.indexByString('F$r')).value = p.totalFuelCost;
+        sheet.cell(CellIndex.indexByString('G$r')).value = p.netPrice;
+      }
+
+      // ===== Grand total =====
+      final totalRow = summaryRow + 2 + _projectSummaries.length + 1;
+      sheet.cell(CellIndex.indexByString('A$totalRow')).value = 'สรุปรวมทั้งหมด';
+      sheet.cell(CellIndex.indexByString('E$totalRow')).value = _totalSoilPrice;
+      sheet.cell(CellIndex.indexByString('F$totalRow')).value = _totalFuelCost;
+      sheet.cell(CellIndex.indexByString('G$totalRow')).value = _totalNetPrice;
+
+      // ===== Save (fixed) =====
+      final bytes = excel.save();
+      if (bytes == null) {
+        _showSnack('ไม่สามารถสร้างไฟล์ Excel ได้');
+        return;
+      }
+
+      // NOTE: ใช้ "name" ที่ไม่ใส่ .xlsx และกำหนด ext: "xlsx" เพื่อเลี่ยง .xlsx.xlsx
+      final fileNameNoExt = 'soil_calculation_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}';
+
+      // ถ้า lib รองรับ ให้ระบุ mimeType จะช่วยให้ไปโฟลเดอร์ "Downloads" ได้บ่อยขึ้นในบางรุ่น
+      final savedPath = await FileSaver.instance.saveFile(
+        name: fileNameNoExt,
+        bytes: Uint8List.fromList(bytes),
+        ext: 'xlsx',
+        // mimeType: MimeType.microsoftExcel, // <- uncomment ถ้าแพ็กเกจรองรับ
       );
+
+      debugPrint('Excel saved to: $savedPath');
+      _showSnack('ส่งออกไฟล์แล้ว: $savedPath');
+
+      // ถ้าอยากเปิดไฟล์ทันที (ต้องเพิ่มแพ็กเกจ open_filex):
+      // await OpenFilex.open(savedPath);
+    } catch (e) {
+      _showSnack('เกิดข้อผิดพลาดในการส่งออก: $e');
     }
   }
-
- // ---------- EXCEL EXPORT (fixed name & path logging) ----------
-Future<void> _exportToExcel() async {
-  try {
-    final excel = Excel.createExcel();
-    final sheet = excel['คำนวณปริมาณดิน'];
-
-    // ===== Header =====
-    final headers = [
-      'โครงการ', 'ทะเบียนรถ', 'วันที่เริ่ม', 'จำนวนเที่ยว', 'ประเภทดิน',
-      'กว้าง (ม.)', 'ยาว (ม.)', 'สูง (ม.)', 'ปริมาตร (ลบ.ม.)',
-      'ราคาต่อหน่วย', 'ราคาดินรวม', 'ค่าน้ำมัน', 'เงินสุทธิ'
-    ];
-    for (int i = 0; i < headers.length; i++) {
-      sheet.cell(CellIndex.indexByString('${String.fromCharCode(65 + i)}1'))
-        ..value = headers[i]
-        ..cellStyle = CellStyle(bold: true, backgroundColorHex: '#E8F5E8');
-    }
-
-    // ===== Rows =====
-    final allItems = [..._savedItems, ..._previewItems];
-    for (int i = 0; i < allItems.length; i++) {
-      final it = allItems[i];
-      final r = i + 2;
-      sheet.cell(CellIndex.indexByString('A$r')).value = it.projectName;
-      sheet.cell(CellIndex.indexByString('B$r')).value = it.plate;
-      sheet.cell(CellIndex.indexByString('C$r')).value = _fmtDate.format(it.startDate);
-      sheet.cell(CellIndex.indexByString('D$r')).value = it.tripCount;
-      sheet.cell(CellIndex.indexByString('E$r')).value = it.soilType;
-      sheet.cell(CellIndex.indexByString('F$r')).value = it.width;
-      sheet.cell(CellIndex.indexByString('G$r')).value = it.length;
-      sheet.cell(CellIndex.indexByString('H$r')).value = it.height;
-      sheet.cell(CellIndex.indexByString('I$r')).value = it.volume;
-      sheet.cell(CellIndex.indexByString('J$r')).value = it.unitPrice;
-      sheet.cell(CellIndex.indexByString('K$r')).value = it.soilPrice;
-      sheet.cell(CellIndex.indexByString('L$r')).value = it.fuelCost;
-      sheet.cell(CellIndex.indexByString('M$r')).value = it.netPrice;
-    }
-
-    // ===== Summary by project =====
-    final summaryRow = allItems.length + 3;
-    sheet.cell(CellIndex.indexByString('A$summaryRow')).value = 'สรุปตามโครงการ';
-    sheet.cell(CellIndex.indexByString('A${summaryRow + 1}')).value = 'โครงการ';
-    sheet.cell(CellIndex.indexByString('B${summaryRow + 1}')).value = 'จำนวนรถ';
-    sheet.cell(CellIndex.indexByString('C${summaryRow + 1}')).value = 'เที่ยวทั้งหมด';
-    sheet.cell(CellIndex.indexByString('D${summaryRow + 1}')).value = 'ปริมาตรรวม';
-    sheet.cell(CellIndex.indexByString('E${summaryRow + 1}')).value = 'ราคาดินรวม';
-    sheet.cell(CellIndex.indexByString('F${summaryRow + 1}')).value = 'ค่าน้ำมันรวม';
-    sheet.cell(CellIndex.indexByString('G${summaryRow + 1}')).value = 'เงินสุทธิ';
-
-    int idx = 0;
-    for (final p in _projectSummaries) {
-      final r = summaryRow + 2 + idx++;
-      sheet.cell(CellIndex.indexByString('A$r')).value = p.projectName;
-      sheet.cell(CellIndex.indexByString('B$r')).value = p.vehicleCount;
-      sheet.cell(CellIndex.indexByString('C$r')).value = p.totalTrips;
-      sheet.cell(CellIndex.indexByString('D$r')).value = p.totalVolume;
-      sheet.cell(CellIndex.indexByString('E$r')).value = p.totalSoilPrice;
-      sheet.cell(CellIndex.indexByString('F$r')).value = p.totalFuelCost;
-      sheet.cell(CellIndex.indexByString('G$r')).value = p.netPrice;
-    }
-
-    // ===== Grand total =====
-    final totalRow = summaryRow + 2 + _projectSummaries.length + 1;
-    sheet.cell(CellIndex.indexByString('A$totalRow')).value = 'สรุปรวมทั้งหมด';
-    sheet.cell(CellIndex.indexByString('E$totalRow')).value = _totalSoilPrice;
-    sheet.cell(CellIndex.indexByString('F$totalRow')).value = _totalFuelCost;
-    sheet.cell(CellIndex.indexByString('G$totalRow')).value = _totalNetPrice;
-
-    // ===== Save (fixed) =====
-    final bytes = excel.save();
-    if (bytes == null) {
-      _showSnack('ไม่สามารถสร้างไฟล์ Excel ได้');
-      return;
-    }
-
-    // NOTE: ใช้ "name" ที่ไม่ใส่ .xlsx และกำหนด ext: "xlsx" เพื่อเลี่ยง .xlsx.xlsx
-    final fileNameNoExt = 'soil_calculation_${DateFormat('yyyyMMdd_HHmmss').format(DateTime.now())}';
-
-    // ถ้า lib รองรับ ให้ระบุ mimeType จะช่วยให้ไปโฟลเดอร์ "Downloads" ได้บ่อยขึ้นในบางรุ่น
-    final savedPath = await FileSaver.instance.saveFile(
-      name: fileNameNoExt,
-      bytes: Uint8List.fromList(bytes),
-      ext: 'xlsx',
-      // mimeType: MimeType.microsoftExcel, // <- uncomment ถ้าแพ็กเกจรองรับ
-    );
-
-    debugPrint('Excel saved to: $savedPath');
-    _showSnack('ส่งออกไฟล์แล้ว: $savedPath');
-
-    // ถ้าอยากเปิดไฟล์ทันที (ต้องเพิ่มแพ็กเกจ open_filex):
-    // await OpenFilex.open(savedPath);
-
-  } catch (e) {
-    _showSnack('เกิดข้อผิดพลาดในการส่งออก: $e');
-  }
-}
 
   Future<void> _deleteSavedItem(SoilItem item) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('ลบรายการ'),
-        content: Text('ลบรายการ ${item.plate} ออกจากโครงการ ${item.projectName}?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('ยกเลิก'),
+      builder:
+          (_) => AlertDialog(
+            title: const Text('ลบรายการ'),
+            content: Text('ลบรายการ ${item.plate} ออกจากโครงการ ${item.projectName}?'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('ยกเลิก')),
+              FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('ลบ')),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('ลบ'),
-          ),
-        ],
-      ),
     );
 
     if (confirmed == true) {
       try {
-        final querySnapshot = await _firestore
-            .collection('soil_calculations')
-            .where('projectName', isEqualTo: item.projectName)
-            .where('plate', isEqualTo: item.plate)
-            .where('startDate', isEqualTo: Timestamp.fromDate(item.startDate))
-            .get();
+        final querySnapshot =
+            await _firestore
+                .collection('soil_calculations')
+                .where('projectName', isEqualTo: item.projectName)
+                .where('plate', isEqualTo: item.plate)
+                .where('startDate', isEqualTo: Timestamp.fromDate(item.startDate))
+                .get();
 
         if (querySnapshot.docs.isNotEmpty) {
           await _firestore.collection('soil_calculations').doc(querySnapshot.docs.first.id).delete();
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('ลบรายการเรียบร้อย')),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ลบรายการเรียบร้อย')));
           await _loadSoilCalculations();
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
       }
     }
   }
@@ -542,29 +532,25 @@ Future<void> _exportToExcel() async {
   Future<void> _deleteProject(String projectName) async {
     final confirmed = await showDialog<bool>(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('ลบโครงการ'),
-        content: Text('ลบโครงการ "$projectName" ทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('ยกเลิก'),
+      builder:
+          (_) => AlertDialog(
+            title: const Text('ลบโครงการ'),
+            content: Text('ลบโครงการ "$projectName" ทั้งหมด? การกระทำนี้ไม่สามารถย้อนกลับได้'),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('ยกเลิก')),
+              FilledButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('ลบทั้งหมด'),
+                style: FilledButton.styleFrom(backgroundColor: Colors.red),
+              ),
+            ],
           ),
-          FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('ลบทั้งหมด'),
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
-          ),
-        ],
-      ),
     );
 
     if (confirmed == true) {
       try {
-        final querySnapshot = await _firestore
-            .collection('soil_calculations')
-            .where('projectName', isEqualTo: projectName)
-            .get();
+        final querySnapshot =
+            await _firestore.collection('soil_calculations').where('projectName', isEqualTo: projectName).get();
 
         if (querySnapshot.docs.isNotEmpty) {
           final batch = _firestore.batch();
@@ -578,14 +564,10 @@ Future<void> _exportToExcel() async {
           );
           await _loadSoilCalculations();
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('ไม่พบข้อมูลโครงการนี้')),
-          );
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('ไม่พบข้อมูลโครงการนี้')));
         }
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('เกิดข้อผิดพลาด: $e')),
-        );
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('เกิดข้อผิดพลาด: $e')));
       }
     }
   }
@@ -596,17 +578,11 @@ Future<void> _exportToExcel() async {
 
     for (final item in allItems) {
       if (!projectMap.containsKey(item.projectName)) {
-        projectMap[item.projectName] = ProjectSummary(
-          projectName: item.projectName,
-          items: [],
-        );
+        projectMap[item.projectName] = ProjectSummary(projectName: item.projectName, items: []);
       }
 
       final summary = projectMap[item.projectName]!;
-      projectMap[item.projectName] = ProjectSummary(
-        projectName: item.projectName,
-        items: [...summary.items, item],
-      );
+      projectMap[item.projectName] = ProjectSummary(projectName: item.projectName, items: [...summary.items, item]);
     }
 
     return projectMap.values.toList();
@@ -633,91 +609,96 @@ Future<void> _exportToExcel() async {
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                children: [
-                  // ---------- แถบค้นหา ----------
-                  isWide ? _searchRowWide() : _searchRowNarrow(),
-                  const SizedBox(height: 12),
-
-                  // ---------- แบบฟอร์มเพิ่ม ----------
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(14.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(children: [
-                            const Icon(Icons.add_box_outlined, size: 18),
-                            const SizedBox(width: 6),
-                            Text('เพิ่มข้อมูลการคำนวณ',
-                                style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary)),
-                          ]),
-                          const SizedBox(height: 10),
-                          _formWrap(isWide),
-                        ],
-                      ),
-                    ),
-                  ),
-
-                  // ---------- พรีวิว ----------
-                  if (_previewItems.isNotEmpty) ...[
+      body:
+          _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : SingleChildScrollView(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  children: [
+                    // ---------- แถบค้นหา ----------
+                    isWide ? _searchRowWide() : _searchRowNarrow(),
                     const SizedBox(height: 12),
+
+                    // ---------- แบบฟอร์มเพิ่ม ----------
                     Card(
                       child: Padding(
                         padding: const EdgeInsets.all(14.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // ===== หัวพรีวิวแบบยืดหยุ่น (กันปุ่มล้น) =====
-                            LayoutBuilder(
-                              builder: (ctx, c) {
-                                final ww = c.maxWidth;
-                                final veryNarrow = ww < 340; // เล็กมาก -> ไอคอนล้วน
-                                final shortText  = ww < 420; // แคบ -> ย่อข้อความ
+                            Row(
+                              children: [
+                                const Icon(Icons.add_box_outlined, size: 18),
+                                const SizedBox(width: 6),
+                                Text(
+                                  'เพิ่มข้อมูลการคำนวณ',
+                                  style: TextStyle(fontWeight: FontWeight.w700, color: cs.primary),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 10),
+                            _formWrap(isWide),
+                          ],
+                        ),
+                      ),
+                    ),
 
-                                final saveLabel  = veryNarrow ? '' : (shortText ? 'บันทึก' : 'บันทึกข้อมูล');
-                                final clearLabel = veryNarrow ? '' : (shortText ? 'ล้าง'   : 'ล้างทั้งหมด');
+                    // ---------- พรีวิว ----------
+                    if (_previewItems.isNotEmpty) ...[
+                      const SizedBox(height: 12),
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(14.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // ===== หัวพรีวิวแบบยืดหยุ่น (กันปุ่มล้น) =====
+                              LayoutBuilder(
+                                builder: (ctx, c) {
+                                  final ww = c.maxWidth;
+                                  final veryNarrow = ww < 340; // เล็กมาก -> ไอคอนล้วน
+                                  final shortText = ww < 420; // แคบ -> ย่อข้อความ
 
-                                final filledStyle = FilledButton.styleFrom(
-                                  backgroundColor: Colors.green,
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  minimumSize: const Size(0, 36),
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-                                );
-                                final outlinedStyle = OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                  minimumSize: const Size(0, 36),
-                                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                                  visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-                                );
+                                  final saveLabel = veryNarrow ? '' : (shortText ? 'บันทึก' : 'บันทึกข้อมูล');
+                                  final clearLabel = veryNarrow ? '' : (shortText ? 'ล้าง' : 'ล้างทั้งหมด');
 
-                                return Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  alignment: WrapAlignment.spaceBetween,
-                                  children: [
-                                    Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        const Icon(Icons.preview, size: 18),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          'พรีวิวข้อมูล (${_previewItems.length} รายการ)',
-                                          style: const TextStyle(fontWeight: FontWeight.w700),
-                                        ),
-                                      ],
-                                    ),
-                                    Wrap(
-                                      spacing: 8,
-                                      children: [
-                                        veryNarrow
-                                            ? SizedBox(
+                                  final filledStyle = FilledButton.styleFrom(
+                                    backgroundColor: Colors.green,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    minimumSize: const Size(0, 36),
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+                                  );
+                                  final outlinedStyle = OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    minimumSize: const Size(0, 36),
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+                                  );
+
+                                  return Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    crossAxisAlignment: WrapCrossAlignment.center,
+                                    alignment: WrapAlignment.spaceBetween,
+                                    children: [
+                                      Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Icon(Icons.preview, size: 18),
+                                          const SizedBox(width: 6),
+                                          Text(
+                                            'พรีวิวข้อมูล (${_previewItems.length} รายการ) xx',
+                                            style: const TextStyle(fontWeight: FontWeight.w700),
+                                          ),
+                                        ],
+                                      ),
+                                      Wrap(
+                                        spacing: 8,
+                                        children: [
+                                          veryNarrow
+                                              ? SizedBox(
                                                 height: 36,
                                                 child: FilledButton(
                                                   onPressed: _saveToFirebase,
@@ -725,14 +706,14 @@ Future<void> _exportToExcel() async {
                                                   child: const Icon(Icons.save),
                                                 ),
                                               )
-                                            : FilledButton.icon(
+                                              : FilledButton.icon(
                                                 onPressed: _saveToFirebase,
                                                 icon: const Icon(Icons.save),
                                                 label: Text(saveLabel),
                                                 style: filledStyle,
                                               ),
-                                        veryNarrow
-                                            ? SizedBox(
+                                          veryNarrow
+                                              ? SizedBox(
                                                 height: 36,
                                                 child: OutlinedButton(
                                                   onPressed: _clearAll,
@@ -740,67 +721,65 @@ Future<void> _exportToExcel() async {
                                                   child: const Icon(Icons.clear_all),
                                                 ),
                                               )
-                                            : OutlinedButton.icon(
+                                              : OutlinedButton.icon(
                                                 onPressed: _clearAll,
                                                 icon: const Icon(Icons.clear_all),
                                                 label: Text(clearLabel),
                                                 style: outlinedStyle,
                                               ),
-                                      ],
-                                    ),
-                                  ],
-                                );
-                              },
+                                        ],
+                                      ),
+                                    ],
+                                  );
+                                },
+                              ),
+                              const SizedBox(height: 10),
+                              // มือถือใช้การ์ด / จอกว้างใช้ตาราง
+                              if (isWide) _previewTableView() else _previewCardsMobile(),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+
+                    const SizedBox(height: 12),
+
+                    // ---------- สรุปผลตามโครงการ ----------
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.summarize_outlined, size: 18),
+                            SizedBox(width: 6),
+                            Text('สรุปผลตามโครงการ', style: TextStyle(fontWeight: FontWeight.w700)),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    _buildProjectSummaries(),
+
+                    // ---------- สรุปผลรวมทั้งหมด ----------
+                    Card(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            Expanded(child: _summaryItem('รวมราคาดิน', _fmtMoney.format(_totalSoilPrice), Colors.blue)),
+                            Expanded(
+                              child: _summaryItem('รวมค่าน้ำมัน', _fmtMoney.format(_totalFuelCost), Colors.orange),
                             ),
-                            const SizedBox(height: 10),
-                            // มือถือใช้การ์ด / จอกว้างใช้ตาราง
-                            if (isWide) _previewTableView() else _previewCardsMobile(),
+                            Expanded(
+                              child: _summaryItem('รวมเงินสุทธิ', _fmtMoney.format(_totalNetPrice), Colors.green, true),
+                            ),
                           ],
                         ),
                       ),
                     ),
                   ],
-
-                  const SizedBox(height: 12),
-
-                  // ---------- สรุปผลตามโครงการ ----------
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 10, 14, 6),
-                      child: Row(
-                        children: const [
-                          Icon(Icons.summarize_outlined, size: 18),
-                          SizedBox(width: 6),
-                          Text('สรุปผลตามโครงการ', style: TextStyle(fontWeight: FontWeight.w700)),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  _buildProjectSummaries(),
-
-                  // ---------- สรุปผลรวมทั้งหมด ----------
-                  Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: _summaryItem('รวมราคาดิน', _fmtMoney.format(_totalSoilPrice), Colors.blue),
-                          ),
-                          Expanded(
-                            child: _summaryItem('รวมค่าน้ำมัน', _fmtMoney.format(_totalFuelCost), Colors.orange),
-                          ),
-                          Expanded(
-                            child: _summaryItem('รวมเงินสุทธิ', _fmtMoney.format(_totalNetPrice), Colors.green, true),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
-            ),
     );
   }
 
@@ -867,26 +846,17 @@ Future<void> _exportToExcel() async {
           width: isWide ? 300 : double.infinity,
           child: TextField(
             controller: _projectCtrl,
-            decoration: const InputDecoration(
-              labelText: 'ชื่อโครงการ *',
-              hintText: 'กรอกชื่อโครงการ',
-            ),
+            decoration: const InputDecoration(labelText: 'ชื่อโครงการ *', hintText: 'กรอกชื่อโครงการ'),
           ),
         ),
-        SizedBox(
-          width: isWide ? 200 : double.infinity,
-          child: _buildPlateDropdown(),
-        ),
+        SizedBox(width: isWide ? 200 : double.infinity, child: _buildPlateDropdown()),
         SizedBox(
           width: isWide ? 150 : (MediaQuery.of(context).size.width / 2) - 22,
           child: TextField(
             controller: _startDateCtrl,
             readOnly: true,
             onTap: _selectDate,
-            decoration: const InputDecoration(
-              labelText: 'วันที่เริ่มทำงาน',
-              suffixIcon: Icon(Icons.calendar_today),
-            ),
+            decoration: const InputDecoration(labelText: 'วันที่เริ่มทำงาน', suffixIcon: Icon(Icons.calendar_today)),
           ),
         ),
         SizedBox(
@@ -901,9 +871,7 @@ Future<void> _exportToExcel() async {
           width: isWide ? 150 : (MediaQuery.of(context).size.width / 2) - 22,
           child: DropdownButtonFormField<String>(
             value: _soilType,
-            items: kSoilPrices.keys
-                .map((t) => DropdownMenuItem<String>(value: t, child: Text(t)))
-                .toList(),
+            items: kSoilPrices.keys.map((t) => DropdownMenuItem<String>(value: t, child: Text(t))).toList(),
             onChanged: _onSoilTypeChanged,
             decoration: const InputDecoration(labelText: 'ประเภทดิน'),
           ),
@@ -945,23 +913,26 @@ Future<void> _exportToExcel() async {
           child: TextField(
             controller: _fuelCostCtrl,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
-            decoration: const InputDecoration(
-              labelText: 'ค่าน้ำมัน (฿)',
-              hintText: '0',
-            ),
+            decoration: const InputDecoration(labelText: 'ค่าน้ำมัน (฿)', hintText: '0'),
+          ),
+        ),
+        SizedBox(
+          width: isWide ? 200 : double.infinity,
+          child: TextField(
+            controller: _startLocationCtrl,
+            decoration: const InputDecoration(labelText: 'จุดรับดิน', hintText: 'ระบุสถานที่รับดิน'),
+          ),
+        ),
+        SizedBox(
+          width: isWide ? 200 : double.infinity,
+          child: TextField(
+            controller: _dropLocationCtrl,
+            decoration: const InputDecoration(labelText: 'จุดส่งดิน', hintText: 'ระบุสถานที่ส่งดิน'),
           ),
         ),
         const SizedBox(width: 10),
-        FilledButton.icon(
-          onPressed: _addToPreview,
-          icon: const Icon(Icons.add),
-          label: const Text('เพิ่มข้อมูล'),
-        ),
-        OutlinedButton.icon(
-          onPressed: _clearForm,
-          icon: const Icon(Icons.clear),
-          label: const Text('เคลียร์ฟอร์ม'),
-        ),
+        FilledButton.icon(onPressed: _addToPreview, icon: const Icon(Icons.add), label: const Text('เพิ่มข้อมูล')),
+        OutlinedButton.icon(onPressed: _clearForm, icon: const Icon(Icons.clear), label: const Text('เคลียร์ฟอร์ม')),
       ],
     );
   }
@@ -969,14 +940,9 @@ Future<void> _exportToExcel() async {
   Widget _buildPlateDropdown() {
     return DropdownButtonFormField<String>(
       value: _selectedPlate,
-      items: _vehiclePlates
-          .map((p) => DropdownMenuItem<String>(value: p, child: Text(p)))
-          .toList(),
+      items: _vehiclePlates.map((p) => DropdownMenuItem<String>(value: p, child: Text(p))).toList(),
       onChanged: _onPlateChanged,
-      decoration: const InputDecoration(
-        labelText: 'ทะเบียนรถ *',
-        hintText: 'เลือกทะเบียนรถ',
-      ),
+      decoration: const InputDecoration(labelText: 'ทะเบียนรถ *', hintText: 'เลือกทะเบียนรถ'),
     );
   }
 
@@ -1019,7 +985,9 @@ Future<void> _exportToExcel() async {
                 _TableCell(text: _fmtDate.format(item.startDate)),
                 _TableCell(text: '${item.tripCount}'),
                 _TableCell(text: item.soilType),
-                _TableCell(text: '${_fmtNum.format(item.width)}×${_fmtNum.format(item.length)}×${_fmtNum.format(item.height)}'),
+                _TableCell(
+                  text: '${_fmtNum.format(item.width)}×${_fmtNum.format(item.length)}×${_fmtNum.format(item.height)}',
+                ),
                 _TableCell(text: '${_fmtNum.format(item.volume)} ลบ.ม.'),
                 _TableCell(text: _fmtMoney.format(item.soilPrice)),
                 _TableCell(text: _fmtMoney.format(item.fuelCost), color: Colors.orange),
@@ -1047,177 +1015,202 @@ Future<void> _exportToExcel() async {
   // ====== พรีวิวแบบ "การ์ด" (มือถือ) — กันล้นแนวนอน ======
   Widget _previewCardsMobile() {
     return Column(
-      children: _previewItems.asMap().entries.map((e) {
-        final idx = e.key;
-        final it = e.value;
-        return Card(
-          margin: const EdgeInsets.only(bottom: 8),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+      children:
+          _previewItems.asMap().entries.map((e) {
+            final idx = e.key;
+            final it = e.value;
+            return Card(
+              margin: const EdgeInsets.only(bottom: 8),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Expanded(child: Text(it.plate, style: const TextStyle(fontWeight: FontWeight.w700))),
-                    IconButton(
-                      icon: const Icon(Icons.delete_outline, color: Colors.red),
-                      onPressed: () => _removeFromPreview(idx),
-                      tooltip: 'ลบ',
-                    )
+                    Row(
+                      children: [
+                        Expanded(child: Text(it.plate, style: const TextStyle(fontWeight: FontWeight.w700))),
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, color: Colors.red),
+                          onPressed: () => _removeFromPreview(idx),
+                          tooltip: 'ลบ',
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text('${_fmtDate.format(it.startDate)} • ${it.tripCount} เที่ยว • ${it.soilType}'),
+                    Text(
+                      'ขนาด: ${_fmtNum.format(it.width)} × ${_fmtNum.format(it.length)} × ${_fmtNum.format(it.height)} ม.',
+                    ),
+                    Text('ปริมาตร: ${_fmtNum.format(it.volume)} ลบ.ม.'),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        Expanded(child: Text('ราคาดิน: ${_fmtMoney.format(it.soilPrice)}')),
+                        Expanded(child: Text('ค่าน้ำมัน: ${_fmtMoney.format(it.fuelCost)}')),
+                      ],
+                    ),
+                    Text('จุดรับดิน: ${it.startLocation}'),
+                    Text('จุดส่งดิน: ${it.startLocation}'),
+                    const SizedBox(height: 2),
+                    Text(
+                      'สุทธิ: ${_fmtMoney.format(it.netPrice)}',
+                      style: const TextStyle(fontWeight: FontWeight.bold),
+                    ),
                   ],
                 ),
-                const SizedBox(height: 4),
-                Text('${_fmtDate.format(it.startDate)} • ${it.tripCount} เที่ยว • ${it.soilType}'),
-                Text('ขนาด: ${_fmtNum.format(it.width)} × ${_fmtNum.format(it.length)} × ${_fmtNum.format(it.height)} ม.'),
-                Text('ปริมาตร: ${_fmtNum.format(it.volume)} ลบ.ม.'),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Expanded(child: Text('ราคาดิน: ${_fmtMoney.format(it.soilPrice)}')),
-                    Expanded(child: Text('ค่าน้ำมัน: ${_fmtMoney.format(it.fuelCost)}')),
-                  ],
-                ),
-                const SizedBox(height: 2),
-                Text('สุทธิ: ${_fmtMoney.format(it.netPrice)}',
-                    style: const TextStyle(fontWeight: FontWeight.bold)),
-              ],
-            ),
-          ),
-        );
-      }).toList(),
+              ),
+            );
+          }).toList(),
     );
   }
 
   Widget _buildProjectSummaries() {
-    final filteredProjects = _projectSummaries.where((project) {
-      final query = _searchCtrl.text.trim();
-      if (query.isEmpty) return true;
-      return project.projectName.toLowerCase().contains(query.toLowerCase());
-    }).toList();
+    final filteredProjects =
+        _projectSummaries.where((project) {
+          final query = _searchCtrl.text.trim();
+          if (query.isEmpty) return true;
+          return project.projectName.toLowerCase().contains(query.toLowerCase());
+        }).toList();
 
     return Column(
-      children: filteredProjects.map((project) => Card(
-        margin: const EdgeInsets.only(bottom: 8),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  Expanded(
+      children:
+          filteredProjects
+              .map(
+                (project) => Card(
+                  margin: const EdgeInsets.only(bottom: 8),
+                  child: Padding(
+                    padding: const EdgeInsets.all(16),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(
-                          project.projectName,
-                          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    project.projectName,
+                                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    'รถ ${project.vehicleCount} คัน • ${project.totalTrips} เที่ยว • ${_fmtNum.format(project.totalVolume)} ลบ.ม.',
+                                    style: const TextStyle(color: Colors.grey),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.visibility),
+                                  onPressed: () => _showProjectDetails(project),
+                                  tooltip: 'ดูรายละเอียด',
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.delete_outline, color: Colors.red),
+                                  onPressed: () => _deleteProject(project.projectName),
+                                  tooltip: 'ลบโครงการทั้งหมด',
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'รถ ${project.vehicleCount} คัน • ${project.totalTrips} เที่ยว • ${_fmtNum.format(project.totalVolume)} ลบ.ม.',
-                          style: const TextStyle(color: Colors.grey),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(child: _projectStat('ปริมาตรรวม', '${_fmtNum.format(project.totalVolume)} ลบ.ม.')),
+                            Expanded(
+                              child: _projectStat('ราคาดินรวม', _fmtMoney.format(project.totalSoilPrice), Colors.blue),
+                            ),
+                            Expanded(
+                              child: _projectStat(
+                                'ค่าน้ำมันรวม',
+                                _fmtMoney.format(project.totalFuelCost),
+                                Colors.orange,
+                              ),
+                            ),
+                            Expanded(
+                              child: _projectStat('เงินสุทธิ', _fmtMoney.format(project.netPrice), Colors.green, true),
+                            ),
+                          ],
                         ),
                       ],
                     ),
                   ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.visibility),
-                        onPressed: () => _showProjectDetails(project),
-                        tooltip: 'ดูรายละเอียด',
-                      ),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline, color: Colors.red),
-                        onPressed: () => _deleteProject(project.projectName),
-                        tooltip: 'ลบโครงการทั้งหมด',
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  Expanded(child: _projectStat('ปริมาตรรวม', '${_fmtNum.format(project.totalVolume)} ลบ.ม.')),
-                  Expanded(child: _projectStat('ราคาดินรวม', _fmtMoney.format(project.totalSoilPrice), Colors.blue)),
-                  Expanded(child: _projectStat('ค่าน้ำมันรวม', _fmtMoney.format(project.totalFuelCost), Colors.orange)),
-                  Expanded(child: _projectStat('เงินสุทธิ', _fmtMoney.format(project.netPrice), Colors.green, true)),
-                ],
-              ),
-            ],
-          ),
-        ),
-      )).toList(),
+                ),
+              )
+              .toList(),
     );
   }
 
   void _showProjectDetails(ProjectSummary project) {
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.directions_car),
-            const SizedBox(width: 8),
-            Text('รายละเอียดโครงการ ${project.projectName}'),
-          ],
-        ),
-        content: SizedBox(
-          width: double.maxFinite,
-          child: ListView(
-            shrinkWrap: true,
-            children: [
-              Text('รถทั้งหมด ${project.vehicleCount} คัน', style: const TextStyle(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 8),
-              ...project.items.map((item) => Card(
-                margin: const EdgeInsets.only(bottom: 8),
-                child: ListTile(
-                  title: Text(item.plate),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('${item.soilType} • ${item.tripCount} เที่ยว'),
-                      Text('${_fmtNum.format(item.volume)} ลบ.ม. × ${_fmtNum.format(item.unitPrice)} ฿ = ${_fmtMoney.format(item.soilPrice)}'),
-                      Text('ค่าน้ำมัน: ${_fmtMoney.format(item.fuelCost)}'),
-                      Text('สุทธิ: ${_fmtMoney.format(item.netPrice)}', style: const TextStyle(fontWeight: FontWeight.bold)),
-                    ],
-                  ),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.delete, color: Colors.red),
-                    onPressed: () {
-                      Navigator.pop(context);
-                      _deleteSavedItem(item);
-                    },
-                  ),
+      builder:
+          (context) => AlertDialog(
+            title: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: const Icon(Icons.directions_car),
                 ),
-              )),
-            ],
+                const SizedBox(width: 8),
+                Flexible(child: Text('โครงการ${project.projectName}')),
+              ],
+            ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  Text('รถทั้งหมด ${project.vehicleCount} คัน', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 8),
+                  ...project.items.map(
+                    (item) => Card(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      child: ListTile(
+                        title: Text(item.plate),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('${item.soilType} • ${item.tripCount} เที่ยว'),
+                            Text(
+                              '${_fmtNum.format(item.volume)} ลบ.ม. × ${_fmtNum.format(item.unitPrice)} ฿ = ${_fmtMoney.format(item.soilPrice)}',
+                            ),
+                            Text('ค่าน้ำมัน: ${_fmtMoney.format(item.fuelCost)}'),
+                            Text('จุดรับดิน: ${item.startLocation}'),
+                            Text('จุดส่งดิน: ${item.startLocation}'),
+                            Text(
+                              'สุทธิ: ${_fmtMoney.format(item.netPrice)}',
+                              style: const TextStyle(fontWeight: FontWeight.bold),
+                            ),
+                          ],
+                        ),
+                        trailing: IconButton(
+                          icon: const Icon(Icons.delete, color: Colors.red),
+                          onPressed: () {
+                            Navigator.pop(context);
+                            _deleteSavedItem(item);
+                          },
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('ปิด'))],
           ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('ปิด'),
-          ),
-        ],
-      ),
     );
   }
 
   Widget _projectStat(String title, String value, [Color? color, bool isTotal = false]) {
     return Column(
       children: [
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.grey[600],
-          ),
-          textAlign: TextAlign.center,
-        ),
+        Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[600]), textAlign: TextAlign.center),
         const SizedBox(height: 4),
         Text(
           value,
@@ -1235,17 +1228,16 @@ Future<void> _exportToExcel() async {
   Widget _summaryItem(String title, String value, Color color, [bool isTotal = false]) {
     return Column(
       children: [
-        Text(title, style: TextStyle(
-          fontSize: isTotal ? 16 : 14,
-          fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
-          color: Colors.black54,
-        )),
+        Text(
+          title,
+          style: TextStyle(
+            fontSize: isTotal ? 16 : 14,
+            fontWeight: isTotal ? FontWeight.bold : FontWeight.normal,
+            color: Colors.black54,
+          ),
+        ),
         const SizedBox(height: 4),
-        Text(value, style: TextStyle(
-          fontSize: isTotal ? 20 : 16,
-          fontWeight: FontWeight.bold,
-          color: color,
-        )),
+        Text(value, style: TextStyle(fontSize: isTotal ? 20 : 16, fontWeight: FontWeight.bold, color: color)),
       ],
     );
   }

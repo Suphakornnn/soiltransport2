@@ -1,6 +1,7 @@
 // lib/screens/admin/manage_users.dart
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:soil_transport_app/models/driver_status.dart';
 import 'user_detail_screen.dart';
 
 /// ====== Blue–White palette ======
@@ -52,7 +53,7 @@ class _ManageUsersState extends State<ManageUsers> {
             drivers.add({
               'name': name,
               'plate': plate.isEmpty ? 'ไม่มีทะเบียน' : plate,
-              'status': _getStatusText(driverField['status']),
+              'status': getStatusTextFromEng(data['status']),
               'vehicleId': doc.id,
               'driverData': driverField,
             });
@@ -63,7 +64,7 @@ class _ManageUsersState extends State<ManageUsers> {
             drivers.add({
               'name': name,
               'plate': plate.isEmpty ? 'ไม่มีทะเบียน' : plate,
-              'status': 'พร้อมใช้งาน',
+              'status': getStatusTextFromEng(data['status']),
               'vehicleId': doc.id,
               'driverData': {'name': name},
             });
@@ -85,30 +86,11 @@ class _ManageUsersState extends State<ManageUsers> {
     }
   }
 
-  String _getStatusText(dynamic status) {
-    if (status == null) return 'พร้อมใช้งาน';
-    if (status is String) {
-      switch (status) {
-        case 'ready':
-        case 'พร้อมใช้งาน':
-          return 'พร้อมใช้งาน';
-        case 'maintenance':
-        case 'กำลังซ่อม':
-          return 'กำลังซ่อม';
-        case 'unavailable':
-        case 'ไม่พร้อมใช้งาน':
-          return 'ไม่พร้อมใช้งาน';
-      }
-    }
-    return 'พร้อมใช้งาน';
-  }
-
   List<Map<String, dynamic>> get _filtered {
     final q = _q.trim().toLowerCase();
     if (q.isEmpty) return _users;
     return _users.where((u) {
-      return u['name'].toString().toLowerCase().contains(q) ||
-          u['plate'].toString().toLowerCase().contains(q);
+      return u['name'].toString().toLowerCase().contains(q) || u['plate'].toString().toLowerCase().contains(q);
     }).toList();
   }
 
@@ -134,15 +116,7 @@ class _ManageUsersState extends State<ManageUsers> {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: c.withOpacity(.25)),
       ),
-      child: Text(
-        status,
-        style: TextStyle(
-          color: c,
-          fontWeight: FontWeight.w800,
-          letterSpacing: .2,
-          height: 1.1,
-        ),
-      ),
+      child: Text(status, style: TextStyle(color: c, fontWeight: FontWeight.w800, letterSpacing: .2, height: 1.1)),
     );
   }
 
@@ -150,30 +124,28 @@ class _ManageUsersState extends State<ManageUsers> {
   void _openAddVehicleForm() {
     showDialog(
       context: context,
-      builder: (context) => AddVehicleFormDialog(
-        onSave: (data) async {
-          try {
-            await FirebaseFirestore.instance.collection('vehicles').add({
-              'plate': data['plate'],
-              'driver': {
-                'name': data['driverName'],
-                'status': data['status'],
-                'phone': data['phone'],
-                'address': data['address'],
-                'createdAt': FieldValue.serverTimestamp(),
-              },
-              'createdAt': FieldValue.serverTimestamp(),
-            });
-            if (mounted) {
-              Navigator.pop(context);
-              _showSnack('เพิ่มข้อมูลรถเรียบร้อย');
-              await _fetchDrivers();
-            }
-          } catch (e) {
-            _showSnack('เกิดข้อผิดพลาด: $e');
-          }
-        },
-      ),
+      builder:
+          (context) => AddVehicleFormDialog(
+            onSave: (data) async {
+              try {
+                await FirebaseFirestore.instance.collection('vehicles').add({
+                  'plate': data['plate'],
+                  'driver': data['driverName'],
+                  'status': driverStatusToEng(data['status']),
+                  'phone': data['phone'],
+                  'address': data['address'],
+                  'createdAt': FieldValue.serverTimestamp(),
+                });
+                if (mounted) {
+                  Navigator.pop(context);
+                  _showSnack('เพิ่มข้อมูลรถเรียบร้อย');
+                  await _fetchDrivers();
+                }
+              } catch (e) {
+                _showSnack('เกิดข้อผิดพลาด: $e');
+              }
+            },
+          ),
     );
   }
 
@@ -194,20 +166,13 @@ class _ManageUsersState extends State<ManageUsers> {
         surfaceTintColor: Colors.white,
         elevation: 0.5,
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: _fetchDrivers,
-            tooltip: 'รีเฟรชข้อมูล',
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchDrivers, tooltip: 'รีเฟรชข้อมูล'),
           const SizedBox(width: 8),
           FilledButton.icon(
             onPressed: _openAddVehicleForm,
             icon: const Icon(Icons.add),
             label: const Text('เพิ่มรถ'),
-            style: FilledButton.styleFrom(
-              backgroundColor: _blue,
-              foregroundColor: Colors.white,
-            ),
+            style: FilledButton.styleFrom(backgroundColor: _blue, foregroundColor: Colors.white),
           ),
           const SizedBox(width: 8),
         ],
@@ -234,12 +199,7 @@ class _ManageUsersState extends State<ManageUsers> {
                   children: [
                     const Icon(Icons.error_outline, color: Color(0xFFDC2626)),
                     const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _errorMessage,
-                        style: const TextStyle(color: Color(0xFFDC2626)),
-                      ),
-                    ),
+                    Expanded(child: Text(_errorMessage, style: const TextStyle(color: Color(0xFFDC2626)))),
                     IconButton(
                       icon: const Icon(Icons.close, size: 18),
                       onPressed: () => setState(() => _errorMessage = ''),
@@ -249,64 +209,57 @@ class _ManageUsersState extends State<ManageUsers> {
               ),
 
             Expanded(
-              child: _isLoading
-                  ? const Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          CircularProgressIndicator(color: _blue),
-                          SizedBox(height: 16),
-                          Text('กำลังโหลดข้อมูล...', style: TextStyle(color: _textMuted, fontSize: 16)),
-                        ],
-                      ),
-                    )
-                  : _filtered.isEmpty
+              child:
+                  _isLoading
+                      ? const Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            CircularProgressIndicator(color: _blue),
+                            SizedBox(height: 16),
+                            Text('กำลังโหลดข้อมูล...', style: TextStyle(color: _textMuted, fontSize: 16)),
+                          ],
+                        ),
+                      )
+                      : _filtered.isEmpty
                       ? Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              const Icon(Icons.people_outline, size: 64, color: _textMuted),
-                              const SizedBox(height: 16),
-                              Text(_q.isEmpty ? 'ไม่พบข้อมูลคนขับ' : 'ไม่พบผลลัพธ์การค้นหา',
-                                  style: const TextStyle(color: _textMuted, fontSize: 16)),
-                              if (_q.isNotEmpty)
-                                TextButton(
-                                  onPressed: () => setState(() => _q = ''),
-                                  child: const Text('ล้างการค้นหา'),
-                                ),
-                            ],
-                          ),
-                        )
-                      : isWide
-                          ? LayoutBuilder(
-                              builder: (_, c) {
-                                final maxW = c.maxWidth;
-                                const tileW = 420.0;
-                                final cross = (maxW / tileW).floor().clamp(2, 4);
-                                return GridView.builder(
-                                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                                    crossAxisCount: cross,
-                                    crossAxisSpacing: 16,
-                                    mainAxisSpacing: 16,
-                                    mainAxisExtent: 110, // เตี้ยลง
-                                  ),
-                                  itemCount: _filtered.length,
-                                  itemBuilder: (_, i) => _UserCard(
-                                    user: _filtered[i],
-                                    statusChip: _statusChip,
-                                  ),
-                                );
-                              },
-                            )
-                          : ListView.separated(
-                              itemCount: _filtered.length,
-                              separatorBuilder: (_, __) => const SizedBox(height: 10),
-                              itemBuilder: (_, i) => _UserCard(
-                                user: _filtered[i],
-                                statusChip: _statusChip,
-                                compact: true,
-                              ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            const Icon(Icons.people_outline, size: 64, color: _textMuted),
+                            const SizedBox(height: 16),
+                            Text(
+                              _q.isEmpty ? 'ไม่พบข้อมูลคนขับ' : 'ไม่พบผลลัพธ์การค้นหา',
+                              style: const TextStyle(color: _textMuted, fontSize: 16),
                             ),
+                            if (_q.isNotEmpty)
+                              TextButton(onPressed: () => setState(() => _q = ''), child: const Text('ล้างการค้นหา')),
+                          ],
+                        ),
+                      )
+                      : isWide
+                      ? LayoutBuilder(
+                        builder: (_, c) {
+                          final maxW = c.maxWidth;
+                          const tileW = 420.0;
+                          final cross = (maxW / tileW).floor().clamp(2, 4);
+                          return GridView.builder(
+                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: cross,
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
+                              mainAxisExtent: 110, // เตี้ยลง
+                            ),
+                            itemCount: _filtered.length,
+                            itemBuilder: (_, i) => _UserCard(user: _filtered[i], statusChip: _statusChip),
+                          );
+                        },
+                      )
+                      : ListView.separated(
+                        itemCount: _filtered.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 10),
+                        itemBuilder: (_, i) => _UserCard(user: _filtered[i], statusChip: _statusChip, compact: true),
+                      ),
             ),
           ],
         ),
@@ -327,8 +280,7 @@ class _ManageUsersState extends State<ManageUsers> {
         children: [
           const Icon(Icons.groups_2, color: _blue),
           const SizedBox(width: 8),
-          const Text('ผู้ใช้ทั้งหมด',
-              style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w800, fontSize: 16)),
+          const Text('ผู้ใช้ทั้งหมด', style: TextStyle(color: _textPrimary, fontWeight: FontWeight.w800, fontSize: 16)),
           const SizedBox(width: 8),
           _countPill(_users.length),
           const Spacer(),
@@ -351,8 +303,7 @@ class _ManageUsersState extends State<ManageUsers> {
         borderRadius: BorderRadius.circular(999),
         border: Border.all(color: _cardBorder),
       ),
-      child: Text('$n รายการ',
-          style: const TextStyle(color: _blue, fontWeight: FontWeight.w800, letterSpacing: .2)),
+      child: Text('$n รายการ', style: const TextStyle(color: _blue, fontWeight: FontWeight.w800, letterSpacing: .2)),
     );
   }
 
@@ -367,11 +318,13 @@ class _ManageUsersState extends State<ManageUsers> {
         filled: true,
         fillColor: Colors.white,
         border: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: _cardBorder)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _cardBorder),
+        ),
         focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(12),
-            borderSide: const BorderSide(color: _blue, width: 1.4)),
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: _blue, width: 1.4),
+        ),
       ),
     );
   }
@@ -381,11 +334,7 @@ class _UserCard extends StatelessWidget {
   final Map<String, dynamic> user;
   final Widget Function(String) statusChip;
   final bool compact;
-  const _UserCard({
-    required this.user,
-    required this.statusChip,
-    this.compact = false,
-  });
+  const _UserCard({required this.user, required this.statusChip, this.compact = false});
 
   Widget _buildInitialAvatar(String name) {
     final firstLetter = name.isNotEmpty ? name.characters.first.toUpperCase() : '?';
@@ -459,11 +408,12 @@ class _UserCard extends StatelessWidget {
                     Row(
                       children: [
                         Expanded(
-                          child: Text(name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                  fontSize: 16, fontWeight: FontWeight.w800, color: _textPrimary)),
+                          child: Text(
+                            name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _textPrimary),
+                          ),
                         ),
                         const SizedBox(width: 8),
                         statusChip(status),
@@ -476,15 +426,14 @@ class _UserCard extends StatelessWidget {
                         _plateChip(plate),
                         const Spacer(),
                         OutlinedButton.icon(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => UserDetailScreen(user: user)),
-                            );
+                          onPressed: () async {
+                            final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => UserDetailScreen(user: user)));
+                            if (result != null && context.mounted) {
+                              (context.findAncestorStateOfType<_ManageUsersState>())?._fetchDrivers();
+                            }
                           },
                           icon: const Icon(Icons.info_outline, size: 18, color: _blue),
-                          label: const Text('เพิ่มเติม',
-                              style: TextStyle(color: _blue, fontWeight: FontWeight.w700)),
+                          label: const Text('เพิ่มเติม', style: TextStyle(color: _blue, fontWeight: FontWeight.w700)),
                           style: OutlinedButton.styleFrom(
                             side: const BorderSide(color: _blue),
                             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -521,21 +470,23 @@ class _UserCard extends StatelessWidget {
                 mainAxisAlignment: MainAxisAlignment.center,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _textPrimary)),
+                  Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: _textPrimary),
+                  ),
                   const SizedBox(height: 8),
                   _plateChip(plate),
                 ],
               ),
             ),
             FilledButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(builder: (_) => UserDetailScreen(user: user)),
-                );
+              onPressed: () async {
+                final result = await Navigator.push(context, MaterialPageRoute(builder: (_) => UserDetailScreen(user: user)));
+                if (result != null && context.mounted) {
+                  (context.findAncestorStateOfType<_ManageUsersState>())?._fetchDrivers();
+                }
               },
               icon: const Icon(Icons.info_outline),
               label: const Text('เพิ่มเติม'),
@@ -575,65 +526,68 @@ class _AddVehicleFormDialogState extends State<AddVehicleFormDialog> {
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Row(
-        children: const [
-          Icon(Icons.add_circle_outline, color: _blue),
-          SizedBox(width: 8),
-          Text('เพิ่มข้อมูลรถใหม่'),
-        ],
+        children: const [Icon(Icons.add_circle_outline, color: _blue), SizedBox(width: 8), Text('เพิ่มข้อมูลรถใหม่')],
       ),
       content: SingleChildScrollView(
         child: Form(
           key: _formKey,
-          child: Column(mainAxisSize: MainAxisSize.min, children: [
-            TextFormField(
-              controller: _plateCtrl,
-              decoration: const InputDecoration(
-                labelText: 'ทะเบียนรถ *',
-                hintText: 'กรอกทะเบียนรถ',
-                prefixIcon: Icon(Icons.confirmation_number),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextFormField(
+                controller: _plateCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'ทะเบียนรถ *',
+                  hintText: 'กรอกทะเบียนรถ',
+                  prefixIcon: Icon(Icons.confirmation_number),
+                ),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'กรุณากรอกทะเบียนรถ' : null,
               ),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'กรุณากรอกทะเบียนรถ' : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _driverNameCtrl,
-              decoration: const InputDecoration(
-                labelText: 'ชื่อคนขับ *',
-                hintText: 'กรอกชื่อ-นามสกุลคนขับ',
-                prefixIcon: Icon(Icons.person),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _driverNameCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'ชื่อคนขับ *',
+                  hintText: 'กรอกชื่อ-นามสกุลคนขับ',
+                  prefixIcon: Icon(Icons.person),
+                ),
+                validator: (v) => (v == null || v.trim().isEmpty) ? 'กรุณากรอกชื่อคนขับ' : null,
               ),
-              validator: (v) => (v == null || v.trim().isEmpty) ? 'กรุณากรอกชื่อคนขับ' : null,
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _phoneCtrl,
-              keyboardType: TextInputType.phone,
-              decoration: const InputDecoration(
-                labelText: 'เบอร์โทรศัพท์',
-                hintText: 'กรอกเบอร์โทรศัพท์',
-                prefixIcon: Icon(Icons.phone),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _phoneCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(
+                  labelText: 'เบอร์โทรศัพท์',
+                  hintText: 'กรอกเบอร์โทรศัพท์',
+                  prefixIcon: Icon(Icons.phone),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextFormField(
-              controller: _addressCtrl,
-              maxLines: 2,
-              decoration: const InputDecoration(
-                labelText: 'ที่อยู่',
-                hintText: 'กรอกที่อยู่',
-                prefixIcon: Icon(Icons.location_on),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _addressCtrl,
+                maxLines: 2,
+                decoration: const InputDecoration(
+                  labelText: 'ที่อยู่',
+                  hintText: 'กรอกที่อยู่',
+                  prefixIcon: Icon(Icons.location_on),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            DropdownButtonFormField<String>(
-              value: _status,
-              items: const ['พร้อมใช้งาน', 'กำลังซ่อม', 'ไม่พร้อมใช้งาน']
-                  .map((s) => DropdownMenuItem(value: s, child: Text(s)))
-                  .toList(),
-              onChanged: (v) => setState(() => _status = v!),
-              decoration: const InputDecoration(labelText: 'สถานะ *', prefixIcon: Icon(Icons.circle)),
-            ),
-          ]),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                value: _status,
+                items:
+                    const [
+                      'พร้อมใช้งาน',
+                      'กำลังซ่อม',
+                      'ไม่พร้อมใช้งาน',
+                      'กำลังทำงาน',
+                    ].map((s) => DropdownMenuItem(value: s, child: Text(s))).toList(),
+                onChanged: (v) => setState(() => _status = v!),
+                decoration: const InputDecoration(labelText: 'สถานะ *', prefixIcon: Icon(Icons.circle)),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [

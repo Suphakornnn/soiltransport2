@@ -1,1 +1,5 @@
-class JobModel {final String id; final String jobName; JobModel({required this.id, required this.jobName});}
+class JobModel {
+  final String id;
+  final String jobName;
+  JobModel({required this.id, required this.jobName});
+}

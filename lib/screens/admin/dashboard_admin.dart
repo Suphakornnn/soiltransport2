@@ -19,9 +19,7 @@ Future<void> signOutAndGoLogin(BuildContext context) async {
     Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
   } catch (e) {
     if (!context.mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text('ออกจากระบบไม่สำเร็จ: $e')),
-    );
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('ออกจากระบบไม่สำเร็จ: $e')));
   }
 }
 
@@ -86,7 +84,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
   int totalTrucks = 0;
   int totalDrivers = 0;
   List<Map<String, dynamic>> recentActivities = [];
-  
+
   final TextEditingController _search = TextEditingController();
   int _bottomIndex = 0;
 
@@ -144,7 +142,6 @@ class _DashboardAdminState extends State<DashboardAdmin> {
       setState(() {
         totalDrivers = driverCount;
       });
-
     } catch (e) {
       print('Error fetching dashboard data: $e');
     }
@@ -152,25 +149,22 @@ class _DashboardAdminState extends State<DashboardAdmin> {
 
   Future<void> _fetchRecentActivities() async {
     try {
-      final jobsSnapshot = await FirebaseFirestore.instance
-          .collection('jobs')
-          .orderBy('createdAt', descending: true)
-          .limit(3)
-          .get();
+      final jobsSnapshot =
+          await FirebaseFirestore.instance.collection('jobs').orderBy('createdAt', descending: true).limit(3).get();
 
       final List<Map<String, dynamic>> activities = [];
-      
+
       for (final doc in jobsSnapshot.docs) {
         final data = doc.data();
-        final projectName = data['projectName'] ?? data['project'] ?? 'ไม่มีชื่อโครงการ';
+        final projectName = data['code'] ?? 'ไม่มีชื่อโครงการ';
         final status = data['status'] ?? 'unknown';
         final createdAt = data['createdAt'] as Timestamp?;
-        
+
         String timeText = 'ไม่ทราบเวลา';
         if (createdAt != null) {
           final now = DateTime.now();
           final difference = now.difference(createdAt.toDate());
-          
+
           if (difference.inMinutes < 1) {
             timeText = 'เมื่อสักครู่';
           } else if (difference.inMinutes < 60) {
@@ -182,11 +176,7 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           }
         }
 
-        activities.add({
-          'title': 'งาน: $projectName',
-          'time': timeText,
-          'status': status,
-        });
+        activities.add({'title': 'งาน: $projectName', 'time': timeText, 'status': status});
       }
 
       setState(() {
@@ -253,9 +243,11 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                               label: const Text('สร้างงานใหม่'),
                             ),
                           if (!R.isCompact(context)) const SizedBox(width: 8),
-                          _PopupUserMenu(onLogout: () {
-                            signOutAndGoLogin(context);
-                          }),
+                          _PopupUserMenu(
+                            onLogout: () {
+                              signOutAndGoLogin(context);
+                            },
+                          ),
                         ],
                       ),
                     ),
@@ -280,34 +272,92 @@ class _DashboardAdminState extends State<DashboardAdmin> {
                               const SizedBox(height: 18),
                               _SectionTitle('ภาพรวมวันนี้'),
                               const SizedBox(height: 12),
-                              _KpiGrid(items: [
-                                KpiItem('งานทั้งหมด', jobsText, Icons.event_note_rounded, Colors.orange,
-                                    () => _nav(const ManageJobsScreen())),
-                                KpiItem('งานเสร็จสิ้น', '$completedJobs งาน', Icons.verified_rounded, Colors.green,
-                                    () => _nav(ReportsScreen())),
-                                KpiItem('จำนวนรถ', trucksText, Icons.local_shipping_rounded, Colors.blue,
-                                    () => _nav(ManageTrucks())),
-                                KpiItem('คนขับ', driversText, Icons.group_rounded, Colors.purple,
-                                    () => _nav(ManageUsers())),
-                              ]),
+                              _KpiGrid(
+                                items: [
+                                  KpiItem(
+                                    'งานทั้งหมด',
+                                    jobsText,
+                                    Icons.event_note_rounded,
+                                    Colors.orange,
+                                    () => _nav(const ManageJobsScreen()),
+                                  ),
+                                  KpiItem(
+                                    'งานเสร็จสิ้น',
+                                    '$completedJobs งาน',
+                                    Icons.verified_rounded,
+                                    Colors.green,
+                                    () => _nav(ReportsScreen()),
+                                  ),
+                                  KpiItem(
+                                    'จำนวนรถ',
+                                    trucksText,
+                                    Icons.local_shipping_rounded,
+                                    Colors.blue,
+                                    () => _nav(ManageTrucks()),
+                                  ),
+                                  KpiItem(
+                                    'คนขับ',
+                                    driversText,
+                                    Icons.group_rounded,
+                                    Colors.purple,
+                                    () => _nav(ManageUsers()),
+                                  ),
+                                ],
+                              ),
                               const SizedBox(height: 22),
                               _SectionTitle('เมนูลัด'),
                               const SizedBox(height: 12),
                               _QuickGrid(
                                 cols: R.cols(context, c2: 2, c3: 3, c4: 4, c6: 8),
                                 items: [
-                                  QuickItem('สร้างงานใหม่', Icons.add_circle_rounded, Colors.indigo,
-                                      () => _nav(const ManageJobsScreen())),
-                                  QuickItem('จัดการงาน', Icons.assignment_outlined, Colors.orange,
-                                      () => _nav(const ManageJobsScreen())),
-                                  QuickItem('ติดตามรถ', Icons.location_on_outlined, Colors.pink, () => _nav(TrackingScreen())),
-                                  QuickItem('รถบรรทุก', Icons.local_shipping_outlined, Colors.teal, () => _nav(ManageTrucks())),
-                                  QuickItem('ผู้ใช้งาน', Icons.people_alt_outlined, Colors.deepPurple, () => _nav(ManageUsers())),
-                                  QuickItem('เงินเดือน & น้ำมัน', Icons.attach_money_rounded, Colors.green,
-                                      () => _nav(const PayrollScreen())),
-                                  QuickItem('คำนวณดิน', Icons.calculate_rounded, Colors.blueGrey,
-                                      () => _nav(const SoilCalculatorScreen())),
-                                  QuickItem('รายงานสรุป', Icons.bar_chart_rounded, Colors.cyan, () => _nav(ReportsScreen())),
+                                  QuickItem(
+                                    'สร้างงานใหม่',
+                                    Icons.add_circle_rounded,
+                                    Colors.indigo,
+                                    () => _nav(const ManageJobsScreen()),
+                                  ),
+                                  QuickItem(
+                                    'จัดการงาน',
+                                    Icons.assignment_outlined,
+                                    Colors.orange,
+                                    () => _nav(const ManageJobsScreen()),
+                                  ),
+                                  QuickItem(
+                                    'ติดตามรถ',
+                                    Icons.location_on_outlined,
+                                    Colors.pink,
+                                    () => _nav(TrackingScreen()),
+                                  ),
+                                  QuickItem(
+                                    'รถบรรทุก',
+                                    Icons.local_shipping_outlined,
+                                    Colors.teal,
+                                    () => _nav(ManageTrucks()),
+                                  ),
+                                  QuickItem(
+                                    'ผู้ใช้งาน',
+                                    Icons.people_alt_outlined,
+                                    Colors.deepPurple,
+                                    () => _nav(ManageUsers()),
+                                  ),
+                                  QuickItem(
+                                    'เงินเดือน & น้ำมัน',
+                                    Icons.attach_money_rounded,
+                                    Colors.green,
+                                    () => _nav(const PayrollScreen()),
+                                  ),
+                                  QuickItem(
+                                    'คำนวณดิน',
+                                    Icons.calculate_rounded,
+                                    Colors.blueGrey,
+                                    () => _nav(const SoilCalculatorScreen()),
+                                  ),
+                                  QuickItem(
+                                    'รายงานสรุป',
+                                    Icons.bar_chart_rounded,
+                                    Colors.cyan,
+                                    () => _nav(ReportsScreen()),
+                                  ),
                                 ],
                               ),
                               const SizedBox(height: 18),
@@ -326,33 +376,50 @@ class _DashboardAdminState extends State<DashboardAdmin> {
           ],
         ),
       ),
-      bottomNavigationBar: R.isExpanded(context)
-          ? null
-          : NavigationBar(
-              selectedIndex: _bottomIndex,
-              onDestinationSelected: (i) {
-                setState(() => _bottomIndex = i);
-                switch (i) {
-                  case 0:
-                    break;
-                  case 1:
-                    _nav(const ManageJobsScreen());
-                    break;
-                  case 2:
-                    _nav(TrackingScreen());
-                    break;
-                  case 3:
-                    _nav(ReportsScreen());
-                    break;
-                }
-              },
-              destinations: const [
-                NavigationDestination(icon: Icon(Icons.dashboard_outlined), selectedIcon: Icon(Icons.dashboard), label: 'หน้าหลัก'),
-                NavigationDestination(icon: Icon(Icons.assignment_outlined), selectedIcon: Icon(Icons.assignment), label: 'งาน'),
-                NavigationDestination(icon: Icon(Icons.location_on_outlined), selectedIcon: Icon(Icons.location_on), label: 'ติดตาม'),
-                NavigationDestination(icon: Icon(Icons.bar_chart_outlined), selectedIcon: Icon(Icons.bar_chart), label: 'รายงาน'),
-              ],
-            ),
+      bottomNavigationBar:
+          R.isExpanded(context)
+              ? null
+              : NavigationBar(
+                selectedIndex: _bottomIndex,
+                onDestinationSelected: (i) {
+                  setState(() => _bottomIndex = i);
+                  switch (i) {
+                    case 0:
+                      break;
+                    case 1:
+                      _nav(const ManageJobsScreen());
+                      break;
+                    case 2:
+                      _nav(TrackingScreen());
+                      break;
+                    case 3:
+                      _nav(ReportsScreen());
+                      break;
+                  }
+                },
+                destinations: const [
+                  NavigationDestination(
+                    icon: Icon(Icons.dashboard_outlined),
+                    selectedIcon: Icon(Icons.dashboard),
+                    label: 'หน้าหลัก',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.assignment_outlined),
+                    selectedIcon: Icon(Icons.assignment),
+                    label: 'งาน',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.location_on_outlined),
+                    selectedIcon: Icon(Icons.location_on),
+                    label: 'ติดตาม',
+                  ),
+                  NavigationDestination(
+                    icon: Icon(Icons.bar_chart_outlined),
+                    selectedIcon: Icon(Icons.bar_chart),
+                    label: 'รายงาน',
+                  ),
+                ],
+              ),
     );
   }
 
@@ -426,10 +493,7 @@ class _HeroGlass extends StatelessWidget {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: wide ? _wideLayout(context) : _compactLayout(context),
-            ),
+            Padding(padding: const EdgeInsets.all(16), child: wide ? _wideLayout(context) : _compactLayout(context)),
           ],
         ),
       ),
@@ -450,9 +514,24 @@ class _HeroGlass extends StatelessWidget {
                 spacing: 10,
                 runSpacing: 10,
                 children: [
-                  _StatPill(icon: Icons.event_note_rounded, label: 'งานวันนี้', value: '$openCount งาน', color: Colors.indigo),
-                  _StatPill(icon: Icons.play_arrow_rounded, label: 'กำลังวิ่ง', value: '$runCount งาน', color: Colors.orange),
-                  _StatPill(icon: Icons.verified_rounded, label: 'เสร็จสิ้น', value: '$doneCount งาน', color: Colors.green),
+                  _StatPill(
+                    icon: Icons.event_note_rounded,
+                    label: 'งานวันนี้',
+                    value: '$openCount งาน',
+                    color: Colors.indigo,
+                  ),
+                  _StatPill(
+                    icon: Icons.play_arrow_rounded,
+                    label: 'กำลังวิ่ง',
+                    value: '$runCount งาน',
+                    color: Colors.orange,
+                  ),
+                  _StatPill(
+                    icon: Icons.verified_rounded,
+                    label: 'เสร็จสิ้น',
+                    value: '$doneCount งาน',
+                    color: Colors.green,
+                  ),
                 ],
               ),
             ],
@@ -481,7 +560,12 @@ class _HeroGlass extends StatelessWidget {
           spacing: 10,
           runSpacing: 10,
           children: [
-            _StatPill(icon: Icons.event_note_rounded, label: 'งานวันนี้', value: '$openCount งาน', color: Colors.indigo),
+            _StatPill(
+              icon: Icons.event_note_rounded,
+              label: 'งานวันนี้',
+              value: '$openCount งาน',
+              color: Colors.indigo,
+            ),
             _StatPill(icon: Icons.play_arrow_rounded, label: 'กำลังวิ่ง', value: '$runCount งาน', color: Colors.orange),
             _StatPill(icon: Icons.verified_rounded, label: 'เสร็จสิ้น', value: '$doneCount งาน', color: Colors.green),
           ],
@@ -507,7 +591,10 @@ class _BannerText extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('บริหารงานให้ไหลลื่น', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900)),
+        Text(
+          'บริหารงานให้ไหลลื่น',
+          style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900),
+        ),
         const SizedBox(height: 6),
         Text('สร้างงาน • ติดตามรถ • สรุปรายงาน ได้ในหน้าเดียว', style: TextStyle(color: onVar)),
       ],
@@ -521,12 +608,7 @@ class _StatPill extends StatelessWidget {
   final String value;
   final Color color;
 
-  const _StatPill({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.color,
-  });
+  const _StatPill({required this.icon, required this.label, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -684,7 +766,11 @@ class _AppDrawer extends StatelessWidget {
         children: [
           UserAccountsDrawerHeader(
             decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [cs.primary, cs.secondary], begin: Alignment.topLeft, end: Alignment.bottomRight),
+              gradient: LinearGradient(
+                colors: [cs.primary, cs.secondary],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
             ),
             accountName: const Text('Admin'),
             accountEmail: const Text('admin@company.com'),
@@ -777,7 +863,8 @@ class _KpiCardState extends State<_KpiCard> {
     final c = widget.item.color;
     final scale = MediaQuery.of(context).textScaleFactor;
 
-    final baseNumStyle = Theme.of(context).textTheme.titleLarge ?? const TextStyle(fontSize: 22, fontWeight: FontWeight.w800);
+    final baseNumStyle =
+        Theme.of(context).textTheme.titleLarge ?? const TextStyle(fontSize: 22, fontWeight: FontWeight.w800);
     final numFontSize = (baseNumStyle.fontSize ?? 22) * (scale > 1.1 ? 0.92 : 1.0);
 
     return MouseRegion(
@@ -802,7 +889,11 @@ class _KpiCardState extends State<_KpiCard> {
               color: Colors.white,
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
-                BoxShadow(color: Colors.black.withOpacity(_hover ? .08 : .05), blurRadius: _hover ? 20 : 14, offset: const Offset(0, 8)),
+                BoxShadow(
+                  color: Colors.black.withOpacity(_hover ? .08 : .05),
+                  blurRadius: _hover ? 20 : 14,
+                  offset: const Offset(0, 8),
+                ),
               ],
               border: Border.all(color: cs.outlineVariant.withOpacity(.2)),
             ),
@@ -887,7 +978,8 @@ class _MetricValue extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final numStyle = (Theme.of(context).textTheme.titleLarge ?? const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))
+    final numStyle = (Theme.of(context).textTheme.titleLarge ??
+            const TextStyle(fontSize: 22, fontWeight: FontWeight.w900))
         .copyWith(fontWeight: FontWeight.w900, height: 1.1, fontSize: numFontSize);
     final unitStyle = Theme.of(context).textTheme.titleMedium?.copyWith(
       color: Theme.of(context).colorScheme.onSurfaceVariant,
@@ -901,10 +993,7 @@ class _MetricValue extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(numberText, style: numStyle),
-          if (unitText.isNotEmpty) ...[
-            const SizedBox(width: 6),
-            Text(unitText, style: unitStyle),
-          ],
+          if (unitText.isNotEmpty) ...[const SizedBox(width: 6), Text(unitText, style: unitStyle)],
         ],
       ),
     );
@@ -965,9 +1054,10 @@ class _QuickCardState extends State<_QuickCard> {
           color: Colors.white,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: cs.outlineVariant.withOpacity(.35)),
-          boxShadow: _hover
-              ? [BoxShadow(color: Colors.black.withOpacity(.07), blurRadius: 16, offset: const Offset(0, 10))]
-              : [BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 12, offset: const Offset(0, 6))],
+          boxShadow:
+              _hover
+                  ? [BoxShadow(color: Colors.black.withOpacity(.07), blurRadius: 16, offset: const Offset(0, 10))]
+                  : [BoxShadow(color: Colors.black.withOpacity(.04), blurRadius: 12, offset: const Offset(0, 6))],
         ),
         child: InkWell(
           onTap: widget.item.onTap,
@@ -1020,11 +1110,11 @@ class _QuickCardState extends State<_QuickCard> {
 class _RecentList extends StatelessWidget {
   final List<Map<String, dynamic>> items;
   const _RecentList({required this.items});
-  
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    
+
     if (items.isEmpty) {
       return Container(
         padding: const EdgeInsets.all(20),
@@ -1037,15 +1127,12 @@ class _RecentList extends StatelessWidget {
           children: [
             Icon(Icons.history_rounded, size: 48, color: cs.outlineVariant),
             const SizedBox(height: 8),
-            Text(
-              'ไม่มีกิจกรรมล่าสุด',
-              style: TextStyle(color: cs.outlineVariant),
-            ),
+            Text('ไม่มีกิจกรรมล่าสุด', style: TextStyle(color: cs.outlineVariant)),
           ],
         ),
       );
     }
-    
+
     return Container(
       decoration: BoxDecoration(
         color: cs.surface,
@@ -1076,7 +1163,7 @@ class _RecentList extends StatelessWidget {
 class _StatusChip extends StatelessWidget {
   final String status;
   const _StatusChip({required this.status});
-  
+
   String _getStatusText(String status) {
     switch (status) {
       case 'waiting':
@@ -1095,7 +1182,7 @@ class _StatusChip extends StatelessWidget {
         return status;
     }
   }
-  
+
   Color _getStatusColor(String status) {
     switch (status) {
       case 'waiting':
@@ -1114,12 +1201,12 @@ class _StatusChip extends StatelessWidget {
         return Colors.grey;
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final statusText = _getStatusText(status);
     final statusColor = _getStatusColor(status);
-    
+
     return Chip(
       label: Text(statusText),
       backgroundColor: statusColor.withOpacity(.12),
@@ -1168,7 +1255,11 @@ class _SectionTitle extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     return Row(
       children: [
-        Container(width: 6, height: 22, decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(3))),
+        Container(
+          width: 6,
+          height: 22,
+          decoration: BoxDecoration(color: cs.primary, borderRadius: BorderRadius.circular(3)),
+        ),
         const SizedBox(width: 8),
         Text(text, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w900)),
       ],
@@ -1189,24 +1280,22 @@ class _PopupUserMenu extends StatelessWidget {
       onSelected: (v) {
         if (v == 'logout') onLogout();
       },
-      itemBuilder: (ctx) => const [
-        PopupMenuItem(value: 'profile', child: Text('โปรไฟล์')),
-        PopupMenuDivider(),
-        PopupMenuItem(
-          value: 'logout',
-          child: Row(
-            children: [
-              Icon(Icons.logout, color: Color(0xFFB3261E)),
-              SizedBox(width: 8),
-              Text('ออกจากระบบ', style: TextStyle(color: Color(0xFFB3261E))),
-            ],
-          ),
-        ),
-      ],
-      child: const CircleAvatar(
-        radius: 16,
-        child: Icon(Icons.person, size: 18),
-      ),
+      itemBuilder:
+          (ctx) => const [
+            PopupMenuItem(value: 'profile', child: Text('โปรไฟล์')),
+            PopupMenuDivider(),
+            PopupMenuItem(
+              value: 'logout',
+              child: Row(
+                children: [
+                  Icon(Icons.logout, color: Color(0xFFB3261E)),
+                  SizedBox(width: 8),
+                  Text('ออกจากระบบ', style: TextStyle(color: Color(0xFFB3261E))),
+                ],
+              ),
+            ),
+          ],
+      child: const CircleAvatar(radius: 16, child: Icon(Icons.person, size: 18)),
     );
   }
 }
